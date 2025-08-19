@@ -53,3 +53,9 @@
 - PortAudio WASAPI notes: [PortAudio Wiki - WASAPI](http://portaudio.com/docs/v19-doxydocs/)
 - Microsoft WASAPI overview: [Windows Audio Session API](https://learn.microsoft.com/windows/win32/coreaudio/core-audio-apis-in-windows-vista)
 - Optional: ASIO drivers and bridges (ASIO4ALL, FlexASIO)
+
+#### Status
+- Implemented deliverables: `audio/capture.py`, `scripts/probe_audio.py`, `configs/audio.yaml`.
+- Default capture path: Windows WASAPI loopback on `Głośniki (Realtek(R) Audio)` at 48 kHz, 2 channels.
+- Validation: 60-second capture completed successfully with continuous meters; WAV recorded (`realtek_60s.wav`).
+- DDJ‑FLX4 direct output/input capture deferred due to endpoint format/locking; fallback loopback path provides reliable master audio for now.
