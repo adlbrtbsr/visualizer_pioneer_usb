@@ -1,0 +1,8 @@
+# Visuals configuration
+renderer: opengl   # 'opengl' recommended for real-time
+fps: 60
+num_bands: 32
+min_height: 0.05
+color_scheme: ["BLUE", "GREEN", "RED"]
+
+

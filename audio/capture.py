@@ -190,10 +190,8 @@ class AudioCapture:
                 if isinstance(sel_info.get("default_samplerate"), (int, float)) and sel_info["default_samplerate"]:
                     samplerate = int(sel_info["default_samplerate"]) or samplerate
                 out_channels = int(sel_info.get("max_output_channels", 0) or 0)
-                # Prefer stereo for shared-mode loopback to avoid invalid channel counts
-                if out_channels >= 2:
-                    channels = 2
-                elif out_channels > 0:
+                # Match loopback channel count to the output device's mix format
+                if out_channels > 0:
                     channels = out_channels
             elif (not self.config.loopback) and sel_info is not None:
                 # Align to device defaults for input devices
@@ -203,17 +201,44 @@ class AudioCapture:
                 if in_channels > 0:
                     channels = min(channels, in_channels)
 
-            self._stream = sd.InputStream(
-                device=device_index,
-                samplerate=samplerate,
-                channels=channels,
-                dtype=self.config.dtype,
-                blocksize=self.config.block_size,
-                latency=self.config.latency,
-                extra_settings=extra,
-                callback=self._callback,
-            )
-            self._stream.start()
+            # Try to open stream; for loopback, probe a few likely channel counts
+            def _open_stream(ch: int):
+                return sd.InputStream(
+                    device=device_index,
+                    samplerate=samplerate,
+                    channels=ch,
+                    dtype=self.config.dtype,
+                    blocksize=self.config.block_size,
+                    latency=self.config.latency,
+                    extra_settings=extra,
+                    callback=self._callback,
+                )
+
+            open_ok = False
+            last_exc: Optional[Exception] = None
+            channel_candidates = [channels]
+            if self.config.loopback:
+                # Prefer stereo, then common counts
+                for c in [2, 4, 1]:
+                    if c not in channel_candidates:
+                        channel_candidates.append(c)
+            for ch in channel_candidates:
+                try:
+                    stream = _open_stream(ch)
+                    stream.start()
+                    # Success
+                    self._stream = stream
+                    channels = ch
+                    open_ok = True
+                    break
+                except Exception as e:
+                    last_exc = e
+                    continue
+            if not open_ok:
+                self._stream = None
+                if last_exc:
+                    raise last_exc
+                raise RuntimeError("Failed to open audio input stream for loopback.")
             self._running = True
             # Set default device to help some backends
             if device_index is not None:

@@ -165,8 +165,11 @@ def aggregate_bands(
 		n_fft = int(params.get("n_fft"))
 		if not sample_rate or not n_fft:
 			raise ValueError("log scheme requires 'sample_rate' and 'n_fft'")
-		min_freq = float(params.get("min_freq", 20.0))
-		max_freq = float(params.get("max_freq", sample_rate / 2.0))
+		# Handle optional min/max when YAML provides null
+		min_raw = params.get("min_freq", 20.0)
+		max_raw = params.get("max_freq", None)
+		min_freq = float(20.0 if min_raw is None else min_raw)
+		max_freq = float((sample_rate / 2.0) if max_raw is None else max_raw)
 		freq_edges = _freq_edges_for_log_spacing(num_bands, sample_rate, min_freq, max_freq)
 		edges = _bin_edges_from_freq_edges(freq_edges, n_fft=n_fft, sample_rate=sample_rate)
 
