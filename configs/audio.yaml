@@ -1,5 +1,6 @@
 host_api_name: "Windows WASAPI"
-device_substring: "Realtek"
+device_substring: "Głośniki"
+device_index: null
 sample_rate: 48000
 block_size: 512
 channels: 2
