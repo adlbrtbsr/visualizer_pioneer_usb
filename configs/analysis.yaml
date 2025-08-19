@@ -1,0 +1,33 @@
+# FFT and feature extraction defaults
+sample_rate: 44100
+n_fft: 1024
+hop_size: 512
+window: hann
+
+# Band aggregation
+bands:
+  mode: log   # 'linear' or 'log'
+  num_bands: 32
+  min_freq: 20.0
+  max_freq: null  # defaults to Nyquist
+
+# Smoothing (attack-release EMA)
+smoother:
+  attack: 0.6
+  release: 0.15
+
+# Normalization
+normalizer:
+  mode: peak  # 'peak' or 'percentile'
+  window: 60
+  decay: 0.02
+  floor: 1.0e-6
+
+# Beat detector
+beat:
+  threshold: 1.4
+  short_window: 5
+  long_window: 43
+  refractory_frames: 12
+
+
