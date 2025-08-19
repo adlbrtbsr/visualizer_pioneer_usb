@@ -1,0 +1,12 @@
+host_api_name: "Windows WASAPI"
+device_substring: "Realtek"
+sample_rate: 48000
+block_size: 512
+channels: 2
+latency: 0.02
+loopback: true
+exclusive: false
+dtype: "float32"
+ringbuffer_blocks: 64
+
+
