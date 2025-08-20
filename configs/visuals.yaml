@@ -4,5 +4,24 @@ fps: 60
 num_bands: 32
 min_height: 0.05
 color_scheme: ["BLUE", "GREEN", "RED"]
+bar_opacity: 0.5
+scene_scale: 6
+baseline_y: -3.0
+scene_width: 12
+
+# Shapes driven by low frequencies
+shapes:
+  enabled: true
+  low_bands_count: 4
+  spawn_threshold: 0.6
+  cooldown_ms: 150
+  max_active: 25
+  lifespan_s: 1.2
+  drift_y: 0
+  # Set to 0 to only fade out without drifting
+  size_range: [0.2, 0.8]
+  shape_types: ["circle", "triangle", "square"]
+  colors: ["PURPLE"]
+  opacity_range: [0.9, 0.0]
 
 

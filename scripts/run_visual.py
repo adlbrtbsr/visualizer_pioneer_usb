@@ -282,6 +282,7 @@ def analysis_worker(shared: SharedBands, audio_cfg_path: Path, analysis_cfg_path
 configs_dir = _PROJECT_ROOT / "configs"
 audio_cfg_path = configs_dir / "audio.yaml"
 analysis_cfg_path = configs_dir / "analysis.yaml"
+visuals_cfg_path = configs_dir / "visuals.yaml"
 _shared = SharedBands()
 _stop_event = threading.Event()
 
@@ -293,8 +294,18 @@ class SpectrumBarsScene(BaseSpectrumBarsScene):
 	"""
 
 	def __init__(self, renderer=None, **kwargs):
-		# Wire global shared into the base scene
-		super().__init__(renderer=renderer, shared=_shared, **kwargs)
+		# Load visuals configuration if available and pass to base
+		viz_cfg = load_yaml(visuals_cfg_path)
+		num_bands = int(viz_cfg.get("num_bands", 32))
+		min_height = float(viz_cfg.get("min_height", 0.05))
+		color_scheme = viz_cfg.get("color_scheme")
+		shapes_cfg = viz_cfg.get("shapes")
+		scene_scale = float(viz_cfg.get("scene_scale", 1.0))
+		baseline_y = float(viz_cfg.get("baseline_y", -3.0))
+		scene_width = float(viz_cfg.get("scene_width", 12.0))
+		bar_opacity = float(viz_cfg.get("bar_opacity", 0.9))
+		# Wire global shared into the base scene with visuals config
+		super().__init__(renderer=renderer, shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity, **kwargs)
 		self._worker_started = False
 
 	def construct(self):
@@ -360,7 +371,17 @@ def main(argv: list[str] | None = None):
 			manim_config.disable_caching = True
 		except Exception:
 			pass
-		scene = BaseSpectrumBarsScene(shared=_shared)
+		# Load visuals config for direct invocation too
+		viz_cfg = load_yaml(visuals_cfg_path)
+		num_bands = int(viz_cfg.get("num_bands", 32))
+		min_height = float(viz_cfg.get("min_height", 0.05))
+		color_scheme = viz_cfg.get("color_scheme")
+		shapes_cfg = viz_cfg.get("shapes")
+		scene_scale = float(viz_cfg.get("scene_scale", 1.0))
+		baseline_y = float(viz_cfg.get("baseline_y", -3.0))
+		scene_width = float(viz_cfg.get("scene_width", 12.0))
+		bar_opacity = float(viz_cfg.get("bar_opacity", 0.9))
+		scene = BaseSpectrumBarsScene(shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity)
 		scene.render()
 	except SystemExit:
 		pass
