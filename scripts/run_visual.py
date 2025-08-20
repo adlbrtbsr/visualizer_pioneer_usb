@@ -305,7 +305,7 @@ class SpectrumBarsScene(BaseSpectrumBarsScene):
 		scene_width = float(viz_cfg.get("scene_width", 12.0))
 		bar_opacity = float(viz_cfg.get("bar_opacity", 0.9))
 		# Wire global shared into the base scene with visuals config
-		super().__init__(renderer=renderer, shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity, **kwargs)
+		super().__init__(renderer=renderer, shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity, fractal_config=viz_cfg.get("fractal"), **kwargs)
 		self._worker_started = False
 
 	def construct(self):
@@ -367,12 +367,19 @@ def main(argv: list[str] | None = None):
 		try:
 			manim_config.write_to_movie = False
 			manim_config.preview = True
-			manim_config.renderer = "opengl"
 			manim_config.disable_caching = True
 		except Exception:
 			pass
 		# Load visuals config for direct invocation too
 		viz_cfg = load_yaml(visuals_cfg_path)
+		# Honor renderer from visuals config if provided
+		try:
+			renderer_choice = str(viz_cfg.get("renderer", "opengl")).lower()
+			if renderer_choice in ("opengl", "cairo"):
+				manim_config.renderer = renderer_choice
+				print(f"visuals: using renderer={renderer_choice}")
+		except Exception:
+			pass
 		num_bands = int(viz_cfg.get("num_bands", 32))
 		min_height = float(viz_cfg.get("min_height", 0.05))
 		color_scheme = viz_cfg.get("color_scheme")
@@ -381,7 +388,7 @@ def main(argv: list[str] | None = None):
 		baseline_y = float(viz_cfg.get("baseline_y", -3.0))
 		scene_width = float(viz_cfg.get("scene_width", 12.0))
 		bar_opacity = float(viz_cfg.get("bar_opacity", 0.9))
-		scene = BaseSpectrumBarsScene(shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity)
+		scene = BaseSpectrumBarsScene(shared=_shared, num_bands=num_bands, min_height=min_height, color_scheme=color_scheme, shapes_config=shapes_cfg, scene_scale=scene_scale, baseline_y=baseline_y, scene_width=scene_width, bar_opacity=bar_opacity, fractal_config=viz_cfg.get("fractal"))
 		scene.render()
 	except SystemExit:
 		pass
