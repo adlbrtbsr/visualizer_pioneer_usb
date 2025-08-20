@@ -162,8 +162,16 @@ class AudioCapture:
                 return
             _, device_index = find_device_index(self.config)
             if device_index is None and self.config.device_substring:
-                raise RuntimeError(
-                    f"Audio device containing '{self.config.device_substring}' not found for host API '{self.config.host_api_name}'."
+                # Fall back to default device if substring not found
+                print(
+                    (
+                        "Audio: device containing '"
+                        + str(self.config.device_substring)
+                        + "' not found for host API '"
+                        + str(self.config.host_api_name)
+                        + "'. Falling back to default device."
+                    ),
+                    file=sys.stderr,
                 )
             if device_index is None:
                 # Fallback to system defaults
@@ -182,24 +190,20 @@ class AudioCapture:
                 except Exception:
                     extra = None
 
-            # If loopback, align channels and sample rate with the output device's mix format
+            # If loopback, prefer device default samplerate; for channels, probe candidates instead of forcing
             samplerate = self.config.sample_rate
-            channels = self.config.channels
+            requested_channels = self.config.channels
             sel_info = sd.query_devices(device_index) if device_index is not None else None
-            if self.config.loopback and sel_info is not None:
+            available_out_channels = 0
+            available_in_channels = 0
+            if sel_info is not None:
                 if isinstance(sel_info.get("default_samplerate"), (int, float)) and sel_info["default_samplerate"]:
                     samplerate = int(sel_info["default_samplerate"]) or samplerate
-                out_channels = int(sel_info.get("max_output_channels", 0) or 0)
-                # Match loopback channel count to the output device's mix format
-                if out_channels > 0:
-                    channels = out_channels
-            elif (not self.config.loopback) and sel_info is not None:
-                # Align to device defaults for input devices
-                if isinstance(sel_info.get("default_samplerate"), (int, float)) and sel_info["default_samplerate"]:
-                    samplerate = int(sel_info["default_samplerate"]) or samplerate
-                in_channels = int(sel_info.get("max_input_channels", 0) or 0)
-                if in_channels > 0:
-                    channels = min(channels, in_channels)
+                available_out_channels = int(sel_info.get("max_output_channels", 0) or 0)
+                available_in_channels = int(sel_info.get("max_input_channels", 0) or 0)
+            # For non-loopback inputs, clamp to device capability
+            if not self.config.loopback and available_in_channels > 0:
+                requested_channels = min(requested_channels, available_in_channels)
 
             # Try to open stream; for loopback, probe a few likely channel counts
             def _open_stream(ch: int):
@@ -216,19 +220,23 @@ class AudioCapture:
 
             open_ok = False
             last_exc: Optional[Exception] = None
-            channel_candidates = [channels]
-            if self.config.loopback:
-                # Prefer stereo, then common counts
-                for c in [2, 4, 1]:
-                    if c not in channel_candidates:
-                        channel_candidates.append(c)
+            # Build channel candidates. Try user-requested first, then device-reported, then common fallbacks
+            channel_candidates = []
+            if requested_channels and requested_channels not in channel_candidates:
+                channel_candidates.append(requested_channels)
+            if self.config.loopback and available_out_channels > 0 and available_out_channels not in channel_candidates:
+                channel_candidates.append(available_out_channels)
+            # Common practical options
+            for c in [2, 4, 1, 6, 8]:
+                if c not in channel_candidates:
+                    channel_candidates.append(c)
             for ch in channel_candidates:
                 try:
                     stream = _open_stream(ch)
                     stream.start()
                     # Success
                     self._stream = stream
-                    channels = ch
+                    requested_channels = ch
                     open_ok = True
                     break
                 except Exception as e:
@@ -247,7 +255,7 @@ class AudioCapture:
                 except Exception:
                     pass
             self._selected_device_index = device_index
-            self._selected_channels = channels
+            self._selected_channels = requested_channels
             self._selected_samplerate = samplerate
             if device_index is not None:
                 self._device_info = sd.query_devices(device_index)
