@@ -2,10 +2,10 @@
 renderer: opengl  # 'opengl' recommended for real-time
 fps: 60
 num_bands: 32
-min_height: 0.05
+min_height: 0.0
 color_scheme: ["BLUE", "GREEN", "RED"]
 bar_opacity: 0.5
-scene_scale: 6
+scene_scale: 5
 baseline_y: -3.0
 scene_width: 12
 
@@ -26,21 +26,23 @@ shapes:
 
 
 
-# Fractal background driven by high frequencies
+# Fractal background driven by chosen bands
 fractal:
   enabled: true
   only: true
-  resolution: [192, 108]
+  resolution: [64, 36]
   mode: "tiles"
   tiles_max_cols: 64
   tiles_max_rows: 36
   max_iter: 60
   hf_bands_count: 8
-  update_fps: 10
+  # Use a specific band slice [start, end) for fractal energy (overrides hf_bands_count)
+  band_range: [13, 20]
+  update_fps: 60
   alpha: 0.7
-  zoom_range: [0.95, 1.6]
-  julia_strength: 0.7
-  color_speed: 0.35
+  zoom_range: [0.9, 1.5]
+  julia_strength: 1.5
+  color_speed: 0.2
   # Expand palette usage for more colors
   color_gamma: 0.8
   color_scale: 1.6

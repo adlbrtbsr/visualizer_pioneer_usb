@@ -141,6 +141,7 @@ class SpectrumBarsScene(Scene):
 			"resolution": [256, 144],
 			"max_iter": 120,
 			"hf_bands_count": 8,
+			"band_range": None,
 			"update_fps": 18,
 			"alpha": 0.65,
 			"zoom_range": [0.95, 1.6],
@@ -174,6 +175,19 @@ class SpectrumBarsScene(Scene):
 		out["resolution"] = [max(32, int(res[0])), max(32, int(res[1]))]
 		out["max_iter"] = max(10, int(out.get("max_iter", 120)))
 		out["hf_bands_count"] = max(1, int(out.get("hf_bands_count", 8)))
+		# Optional explicit band range [start, end) for energy; overrides hf_bands_count if present
+		br = out.get("band_range")
+		if isinstance(br, (list, tuple)) and len(br) == 2:
+			try:
+				start = int(br[0])
+				end = int(br[1])
+				if end < start:
+					start, end = end, start
+				out["band_range"] = [max(0, start), max(0, end)]
+			except Exception:
+				out["band_range"] = None
+		else:
+			out["band_range"] = None
 		out["update_fps"] = max(1, int(out.get("update_fps", 18)))
 		out["alpha"] = float(np.clip(float(out.get("alpha", 0.35)), 0.0, 1.0))
 		zr = out.get("zoom_range", [0.95, 1.6])
@@ -406,13 +420,18 @@ class SpectrumBarsScene(Scene):
 				x = rect.get_center()[0]
 				rect.move_to([x, self.baseline_y + (val * self.scene_scale) / 2.0, 0.0])
 
-			# Update fractal background from high frequencies (with debug overrides)
+			# Update fractal background from selected band range (with debug overrides)
 			if self._fractal_bg is not None:
-				hn = min(int(self._fractal_cfg["hf_bands_count"]), arr.shape[0])
-				if hn > 0:
-					hf_energy = float(np.mean(arr[-hn:]))
+				band_range = self._fractal_cfg.get("band_range")
+				if isinstance(band_range, (list, tuple)) and len(band_range) == 2:
+					start = max(0, int(band_range[0]))
+					end = max(start + 1, int(band_range[1]))
+					end = min(end, arr.shape[0])
+					seg = arr[start:end]
+					energy = float(np.mean(seg)) if seg.size > 0 else float(np.mean(arr))
 				else:
-					hf_energy = float(np.mean(arr))
+					hn = min(int(self._fractal_cfg["hf_bands_count"]), arr.shape[0])
+					energy = float(np.mean(arr[-hn:])) if hn > 0 else float(np.mean(arr))
 				# Debug overrides
 				force_s = float(self._fractal_cfg.get("debug_force_seconds", 0.0))
 				dbg_c = self._fractal_cfg.get("debug_constant", None)
@@ -420,9 +439,9 @@ class SpectrumBarsScene(Scene):
 				if start_time is None:
 					self._fractal_debug_start = now
 				if force_s > 0.0 and (now - self._fractal_debug_start) <= force_s:
-					hf_energy = float(1.0 if dbg_c is None else dbg_c)
+					energy = float(1.0 if dbg_c is None else dbg_c)
 				# Update underlying fractal mobject in-place
-				self._fractal_bg.refresh(hf_energy, now)
+				self._fractal_bg.refresh(energy, now)
 
 			# Spawn shapes based on low frequencies
 			if self._shapes_cfg.get("enabled", True):
