@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+import argparse
 import os
 from typing import Optional
 
@@ -16,7 +17,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parent
 if str(_PROJECT_ROOT) not in sys.path:
 	sys.path.insert(0, str(_PROJECT_ROOT))
 
-from audio import AudioCapture, AudioConfig
+from audio import AudioCapture, AudioConfig, list_devices
 from audio.analysis import compute_spectrum, aggregate_bands, Smoother, Normalizer
 from visuals import SpectrumBarsScene as BaseSpectrumBarsScene, SharedBands
 from manim import config as manim_config
@@ -76,6 +77,28 @@ def analysis_worker(shared: SharedBands, audio_cfg_path: Path, analysis_cfg_path
 		pass
 	audio_cfg_data = load_yaml(audio_cfg_path)
 	analysis_cfg = load_yaml(analysis_cfg_path)
+
+	# Environment variable overrides for one-off runs
+	def _as_bool(s: str) -> bool:
+		return s.strip().lower() in ("1", "true", "yes", "on")
+	env_overrides: list[tuple[str, str, object]] = [
+		("AUDIO_DEVICE_INDEX", "device_index", int),
+		("AUDIO_DEVICE", "device_substring", str),
+		("AUDIO_HOST_API", "host_api_name", str),
+		("AUDIO_SAMPLE_RATE", "sample_rate", int),
+		("AUDIO_BLOCK_SIZE", "block_size", int),
+		("AUDIO_CHANNELS", "channels", int),
+		("AUDIO_LATENCY", "latency", float),
+		("AUDIO_LOOPBACK", "loopback", _as_bool),
+		("AUDIO_EXCLUSIVE", "exclusive", _as_bool),
+	]
+	for env_name, key, caster in env_overrides:
+		val = os.environ.get(env_name)
+		if val is not None and val != "":
+			try:
+				audio_cfg_data[key] = caster(val)
+			except Exception:
+				pass
 
 	cfg = AudioConfig(
 		device_substring=audio_cfg_data.get("device_substring"),
@@ -284,8 +307,48 @@ class SpectrumBarsScene(BaseSpectrumBarsScene):
 		super().construct()
 
 
-def main():
-	# Direct Python entrypoint; launches worker and renders once
+def build_parser() -> argparse.ArgumentParser:
+	p = argparse.ArgumentParser(description="Run realtime spectrum bars visual with audio capture")
+	p.add_argument("--list-devices", action="store_true", help="List audio devices and exit")
+	p.add_argument("--host-api", default=None, help="Filter devices by host API name (e.g., Windows WASAPI)")
+	p.add_argument("--device-index", type=int, default=None, help="Device index to use for capture")
+	p.add_argument("--device", default=None, help="Substring match for device name (e.g., Głośniki or DDJ-FLX4)")
+	p.add_argument("--loopback", action="store_true", help="Capture output loopback")
+	p.add_argument("--no-loopback", action="store_true", help="Disable loopback even if config enables it")
+	p.add_argument("--sample-rate", type=int, default=None)
+	p.add_argument("--channels", type=int, default=None)
+	p.add_argument("--block-size", type=int, default=None)
+	return p
+
+
+def main(argv: list[str] | None = None):
+	args = build_parser().parse_args(argv)
+	if args.list_devices:
+		cfg_data = load_yaml(audio_cfg_path)
+		host_api = args.host_api or cfg_data.get("host_api_name", "Windows WASAPI")
+		devs = list_devices(host_api_name=host_api)
+		for d in devs:
+			print(f"[{d['index']:>3}] {d['name']} | {d['hostapi']} | in:{d['max_input_channels']} out:{d['max_output_channels']} | default_sr:{d['default_samplerate']}")
+		return
+	# Apply one-off overrides via environment variables consumed by analysis_worker
+	if args.host_api:
+		os.environ["AUDIO_HOST_API"] = str(args.host_api)
+	if args.device_index is not None:
+		os.environ["AUDIO_DEVICE_INDEX"] = str(args.device_index)
+	if args.device is not None:
+		os.environ["AUDIO_DEVICE"] = str(args.device)
+	if args.loopback and not args.no_loopback:
+		os.environ["AUDIO_LOOPBACK"] = "1"
+	if args.no_loopback:
+		os.environ["AUDIO_LOOPBACK"] = "0"
+	if args.sample_rate is not None:
+		os.environ["AUDIO_SAMPLE_RATE"] = str(args.sample_rate)
+	if args.channels is not None:
+		os.environ["AUDIO_CHANNELS"] = str(args.channels)
+	if args.block_size is not None:
+		os.environ["AUDIO_BLOCK_SIZE"] = str(args.block_size)
+
+	# Launch worker and render once
 	thread = threading.Thread(target=analysis_worker, args=(_shared, audio_cfg_path, analysis_cfg_path, _stop_event), daemon=True)
 	thread.start()
 	try:
