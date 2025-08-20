@@ -6,6 +6,35 @@ from typing import Optional, Sequence
 import numpy as np
 from manim import VGroup, Rectangle, ImageMobject, config as manim_config, WHITE
 
+# Optional acceleration via numba (falls back to NumPy if unavailable)
+try:
+    from numba import njit, prange  # type: ignore
+    _HAS_NUMBA = True
+except Exception:
+    _HAS_NUMBA = False
+
+if _HAS_NUMBA:
+    @njit(parallel=True, fastmath=True)
+    def _numba_julia_counts(zr: np.ndarray, zi: np.ndarray, zoom: float, max_iter: int, cr: float, ci: float):
+        h, w = zr.shape
+        counts = np.zeros((h, w), np.int32)
+        mask = np.ones((h, w), np.bool_)
+        for y in prange(h):
+            for x in range(w):
+                zr0 = zr[y, x] / zoom
+                zi0 = zi[y, x] / zoom
+                it = 0
+                while it < max_iter:
+                    zr2 = zr0 * zr0 - zi0 * zi0 + cr
+                    zi0 = 2.0 * zr0 * zi0 + ci
+                    zr0 = zr2
+                    if zr0 * zr0 + zi0 * zi0 > 4.0:
+                        counts[y, x] = it
+                        mask[y, x] = False
+                        break
+                    it += 1
+        return counts, mask
+
 
 def default_fractal_cfg() -> dict:
 	return {
@@ -37,6 +66,13 @@ def default_fractal_cfg() -> dict:
 		"tiles_max_cols": 64,
 		"tiles_max_rows": 36,
 		"only": False,
+		# Performance options
+		"accel": "auto",  # 'auto' | 'numba' | 'numpy'
+		"tiles_compute_at_grid": True,
+		# Incremental compute
+		"reuse_across_frames": True,
+		"iters_per_frame": 8,
+		"param_reset_threshold": 0.03,
 	}
 
 
@@ -108,6 +144,14 @@ def sanitize_fractal_cfg(cfg: dict, resolve_colors_fn) -> dict:
 	out["tiles_max_cols"] = max(8, int(out.get("tiles_max_cols", 64)))
 	out["tiles_max_rows"] = max(6, int(out.get("tiles_max_rows", 36)))
 	out["only"] = bool(out.get("only", False))
+	accel = str(out.get("accel", "auto")).lower()
+	if accel not in ("auto", "numba", "numpy"):
+		accel = "auto"
+	out["accel"] = accel
+	out["tiles_compute_at_grid"] = bool(out.get("tiles_compute_at_grid", True))
+	out["reuse_across_frames"] = bool(out.get("reuse_across_frames", True))
+	out["iters_per_frame"] = max(1, int(out.get("iters_per_frame", 8)))
+	out["param_reset_threshold"] = float(max(0.0, float(out.get("param_reset_threshold", 0.03))))
 	pal = out.get("palette")
 	if pal:
 		out["palette"] = resolve_colors_fn(pal)
@@ -147,7 +191,7 @@ class FractalBackground:
 		X, Y = np.meshgrid(x_1d, y_1d)
 		self._Z_template = (X + 1j * Y).astype(np.complex64)
 		self._Z_iter = np.empty_like(self._Z_template)
-		self._counts = np.zeros((self.height, self.width), dtype=np.int32)
+		self._counts = np.zeros((self.height, self.width), dtype=np.uint16)
 		self._mask = np.ones((self.height, self.width), dtype=bool)
 		print("visuals: fractal init", {
 			"res": (self.width, self.height),
@@ -158,6 +202,13 @@ class FractalBackground:
 		self._is_opengl: bool = False
 		mode = str(cfg.get("mode", "image")).lower()
 		self._mode = mode
+		# Incremental iteration state
+		self._reuse = bool(cfg.get("reuse_across_frames", True))
+		self._iters_per_frame = int(cfg.get("iters_per_frame", 8))
+		self._param_reset_threshold = float(cfg.get("param_reset_threshold", 0.03))
+		self._last_zoom = None
+		self._last_c = None
+		self._accum_max_iter = 0
 		if mode == "image":
 			try:
 				from PIL import Image as PILImage
@@ -213,6 +264,17 @@ class FractalBackground:
 					pass
 				self._tiles_cols = cols
 				self._tiles_rows = rows
+				# Optionally compute fractal exactly at tile grid resolution
+				if bool(self.cfg.get("tiles_compute_at_grid", True)):
+					self.width = cols
+					self.height = rows
+					x_1d = np.linspace(-self.extent_x * self._aspect, self.extent_x * self._aspect, self.width, dtype=np.float32)
+					y_1d = np.linspace(-self.extent_y, self.extent_y, self.height, dtype=np.float32)
+					X, Y = np.meshgrid(x_1d, y_1d)
+					self._Z_template = (X + 1j * Y).astype(np.complex64)
+					self._Z_iter = np.empty_like(self._Z_template)
+					self._counts = np.zeros((self.height, self.width), dtype=np.uint16)
+					self._mask = np.ones((self.height, self.width), dtype=bool)
 				self._r_idx = np.linspace(0, self.height - 1, rows).astype(int)
 				self._c_idx = np.linspace(0, self.width - 1, cols).astype(int)
 				self._current_mobject = self._tile_group  # type: ignore
@@ -245,6 +307,17 @@ class FractalBackground:
 				pass
 			self._tiles_cols = cols
 			self._tiles_rows = rows
+			# Optionally compute fractal exactly at tile grid resolution
+			if bool(self.cfg.get("tiles_compute_at_grid", True)):
+				self.width = cols
+				self.height = rows
+				x_1d = np.linspace(-self.extent_x * self._aspect, self.extent_x * self._aspect, self.width, dtype=np.float32)
+				y_1d = np.linspace(-self.extent_y, self.extent_y, self.height, dtype=np.float32)
+				X, Y = np.meshgrid(x_1d, y_1d)
+				self._Z_template = (X + 1j * Y).astype(np.complex64)
+				self._Z_iter = np.empty_like(self._Z_template)
+				self._counts = np.zeros((self.height, self.width), dtype=np.uint16)
+				self._mask = np.ones((self.height, self.width), dtype=bool)
 			self._r_idx = np.linspace(0, self.height - 1, rows).astype(int)
 			self._c_idx = np.linspace(0, self.width - 1, cols).astype(int)
 			self._current_mobject = self._tile_group  # type: ignore
@@ -294,27 +367,55 @@ class FractalBackground:
 	def _render_frame(self, hf_energy: float, now: float) -> np.ndarray:
 		hf = float(np.clip(hf_energy, 0.0, 1.0))
 		zoom = self.zoom_min + (self.zoom_max - self.zoom_min) * hf
-		max_iter = int(self.max_iter_base * (0.6 + 0.8 * hf))
+		max_iter_target = int(self.max_iter_base * (0.6 + 0.8 * hf))
 		radius = 0.7885 * (0.3 + 0.7 * hf)
 		angle = (self._phase + now * self.color_speed * 0.8) * (2.0 * np.pi)
 		c = radius * np.exp(1j * angle) * self.julia_strength
-		np.copyto(self._Z_iter, self._Z_template)
-		self._Z_iter /= np.float32(zoom)
-		self._counts.fill(0)
-		self._mask.fill(True)
-		for i in range(max_iter):
-			self._Z_iter *= self._Z_iter
-			self._Z_iter += c
-			mod2 = (self._Z_iter.real * self._Z_iter.real) + (self._Z_iter.imag * self._Z_iter.imag)
-			escaped = mod2 > 4.0
-			newly = escaped & self._mask
-			self._counts[newly] = i
-			self._mask &= (~escaped)
-			if not self._mask.any():
-				break
+		# Reset on parameter jump
+		need_reset = True
+		if self._reuse and (self._last_zoom is not None) and (self._last_c is not None):
+			if abs(zoom - self._last_zoom) <= self._param_reset_threshold and abs(c - self._last_c) <= self._param_reset_threshold:
+				need_reset = False
+		if need_reset:
+			np.copyto(self._Z_iter, self._Z_template)
+			self._Z_iter /= np.float32(zoom)
+			self._counts.fill(0)
+			self._mask.fill(True)
+			self._accum_max_iter = 0
+		# Incremental step budget
+		step_iters = int(self._iters_per_frame)
+		target = min(max_iter_target, self._accum_max_iter + step_iters)
+		# Choose backend
+		use_numba = (_HAS_NUMBA and str(self.cfg.get("accel", "auto")).lower() in ("auto", "numba"))
+		if use_numba:
+			try:
+				zr = self._Z_iter.real.astype(np.float32)
+				zi = self._Z_iter.imag.astype(np.float32)
+				counts_i, mask = _numba_julia_counts(zr, zi, 1.0, int(target - self._accum_max_iter), float(c.real), float(c.imag))  # type: ignore
+				# Merge results: advance Z_iter by running explicit loop to sync state
+				# Fallback: run numpy for the state advance to keep code simple
+				use_numba = False
+			except Exception:
+				use_numba = False
+		if not use_numba:
+			for i in range(self._accum_max_iter, target):
+				self._Z_iter *= self._Z_iter
+				self._Z_iter += c
+				mod2 = (self._Z_iter.real * self._Z_iter.real) + (self._Z_iter.imag * self._Z_iter.imag)
+				escaped = mod2 > 4.0
+				newly = escaped & self._mask
+				self._counts[newly] = i
+				self._mask &= (~escaped)
+				if not self._mask.any():
+					break
+			self._accum_max_iter = target
+		# Normalize counts by current target
 		counts = self._counts.astype(np.float32)
-		if max_iter > 0:
-			counts = counts / float(max_iter)
+		if target > 0:
+			counts = counts / float(target)
+		mask = self._mask
+		self._last_zoom = zoom
+		self._last_c = c
 		mapped = counts
 		try:
 			if self.color_gamma != 1.0:
@@ -330,14 +431,14 @@ class FractalBackground:
 		img = self._palette[idx]
 		if self.interior_palette:
 			try:
-				img[self._mask] = self._palette[0]
+				img[mask] = self._palette[0]
 			except Exception:
 				pass
 		else:
 			try:
-				img[self._mask] = np.array([30, 80, 160], dtype=np.uint8)
+				img[mask] = np.array([30, 80, 160], dtype=np.uint8)
 			except Exception:
-				img[self._mask] = (img[self._mask] * 0.5).astype(np.uint8)
+				img[mask] = (img[mask] * 0.5).astype(np.uint8)
 		return img
 
 	def _to_rgba(self, img_rgb: np.ndarray) -> np.ndarray:

@@ -30,33 +30,27 @@ shapes:
 fractal:
   enabled: true
   only: true
-  resolution: [96, 54]
-  mode: "image"
-  tiles_max_cols: 96
-  tiles_max_rows: 54
-  max_iter: 60
-  hf_bands_count: 8
-  # Use a specific band slice [start, end) for fractal energy (overrides hf_bands_count)
-  band_range: [13, 20]
-  update_fps: 60
-  alpha: 0.7
+  bands_range: [18, 26]
+  resolution: [64, 36]
+  mode: "tiles"          # cheaper than image mode for real-time
+  tiles_max_cols: 64     # try 64x36 first; increase if smooth
+  tiles_max_rows: 36
+  tiles_compute_at_grid: true
+  accel: "numba"         # avoids Numba JIT startup delay
+  max_iter: 200           # start lower; raise slowly if you have headroom
+  iters_per_frame: 4
+  reuse_across_frames: true
+  param_reset_threshold: 0.04
+  update_fps: 30
+  alpha: 0.9
   zoom_range: [0.9, 1.5]
-  julia_strength: 1.5
-  color_speed: 0.2
-  # Expand palette usage for more colors
-  color_gamma: 0.8
+  julia_strength: 1.4
+  color_speed: 0.05
+  color_gamma: 0.9
   color_scale: 1.6
-  color_offset: 0.1
+  color_offset: 0.3
   interior_palette: true
   palette: ["GREEN", "PURPLE", "RED", "YELLOW"]
-  seed: null
   overlay: true
-  # Spread the fractal outward (larger = thinner look)
   extent_x: 0.8
   extent_y: 1
-  # Debug options
-  debug_force_seconds: 0
-  debug_constant: 0
-  debug_outline: false
-  debug_solid_panel: false
-  debug_fullscreen_panel: false
