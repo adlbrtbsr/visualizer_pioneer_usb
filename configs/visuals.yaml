@@ -30,10 +30,10 @@ shapes:
 fractal:
   enabled: true
   only: true
-  resolution: [64, 36]
-  mode: "tiles"
-  tiles_max_cols: 64
-  tiles_max_rows: 36
+  resolution: [96, 54]
+  mode: "image"
+  tiles_max_cols: 96
+  tiles_max_rows: 54
   max_iter: 60
   hf_bands_count: 8
   # Use a specific band slice [start, end) for fractal energy (overrides hf_bands_count)

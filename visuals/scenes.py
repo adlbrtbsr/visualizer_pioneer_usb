@@ -561,6 +561,15 @@ class _FractalBackground:
 		self._last_update_time = -1e9
 		self._palette = self._build_palette(cfg.get("palette") or fallback_colors)
 		self._phase = self._rng.random()
+		# Precompute static grids to avoid per-frame allocations
+		self._aspect = float(self.width) / float(self.height)
+		x_1d = np.linspace(-self.extent_x * self._aspect, self.extent_x * self._aspect, self.width, dtype=np.float32)
+		y_1d = np.linspace(-self.extent_y, self.extent_y, self.height, dtype=np.float32)
+		X, Y = np.meshgrid(x_1d, y_1d)
+		self._Z_template = (X + 1j * Y).astype(np.complex64)
+		self._Z_iter = np.empty_like(self._Z_template)
+		self._counts = np.zeros((self.height, self.width), dtype=np.int32)
+		self._mask = np.ones((self.height, self.width), dtype=bool)
 		print("visuals: fractal init", {
 			"res": (self.width, self.height),
 			"alpha": self.alpha,
@@ -576,7 +585,8 @@ class _FractalBackground:
 				from PIL import Image as PILImage
 				from manim.mobject.opengl.opengl_image_mobject import OpenGLImageMobject  # type: ignore
 				alpha_byte = int(np.clip(self.alpha, 0.0, 1.0) * 255.0)
-				pil = PILImage.new("RGBA", (2, 2), (0, 0, 0, alpha_byte))
+				# Initialize the texture with the target resolution to avoid size mismatches
+				pil = PILImage.new("RGBA", (self.width, self.height), (0, 0, 0, alpha_byte))
 				mobj = OpenGLImageMobject(pil)
 				try:
 					mobj.set_z_index(-10)
@@ -590,10 +600,46 @@ class _FractalBackground:
 					mobj.set_depth_test(False)
 				except Exception:
 					pass
+				try:
+					mobj.set_opacity(self.alpha)
+				except Exception:
+					pass
 				self._current_mobject = mobj
 				self._is_opengl = True
 			except Exception:
-				self._current_mobject = None
+				# Fallback to tiles mode if OpenGL image is unavailable
+				self._is_opengl = False
+				self._mode = "tiles"
+				self._tile_group = VGroup()
+				cols = int(cfg.get("tiles_max_cols", 64))
+				rows = int(cfg.get("tiles_max_rows", 36))
+				fw = float(manim_config.frame_width)
+				fh = float(manim_config.frame_height)
+				tile_w = fw / float(cols)
+				tile_h = fh / float(rows)
+				for r in range(rows):
+					for c in range(cols):
+						rect = Rectangle(width=tile_w, height=tile_h)
+						rect.set_stroke(width=0)
+						rect.set_fill(WHITE, opacity=self.alpha)
+						try:
+							rect.set_depth_test(False)
+						except Exception:
+							pass
+						x = -fw / 2.0 + (c + 0.5) * tile_w
+						y = -fh / 2.0 + (r + 0.5) * tile_h
+						rect.move_to([x, y, 0.0])
+						self._tile_group.add(rect)
+				try:
+					self._tile_group.set_z_index(999)
+					self._tile_group.set_depth_test(False)
+				except Exception:
+					pass
+				self._tiles_cols = cols
+				self._tiles_rows = rows
+				self._r_idx = np.linspace(0, self.height - 1, rows).astype(int)
+				self._c_idx = np.linspace(0, self.width - 1, cols).astype(int)
+				self._current_mobject = self._tile_group  # type: ignore
 		else:
 			# Tiles mode: build a VGroup of rectangles colored from the fractal image
 			self._is_opengl = False
@@ -622,6 +668,11 @@ class _FractalBackground:
 				self._tile_group.set_depth_test(False)
 			except Exception:
 				pass
+			# Cache downsample indices once per instance
+			self._tiles_cols = cols
+			self._tiles_rows = rows
+			self._r_idx = np.linspace(0, self.height - 1, rows).astype(int)
+			self._c_idx = np.linspace(0, self.width - 1, cols).astype(int)
 			self._current_mobject = self._tile_group  # type: ignore
 
 	def _color_to_uint8(self, color_obj) -> np.ndarray:
@@ -672,24 +723,24 @@ class _FractalBackground:
 		radius = 0.7885 * (0.3 + 0.7 * hf)
 		angle = (self._phase + now * self.color_speed * 0.8) * (2.0 * np.pi)
 		c = radius * np.exp(1j * angle) * self.julia_strength
-		w, h = self.width, self.height
-		aspect = float(w) / float(h)
-		x = np.linspace(-self.extent_x * aspect, self.extent_x * aspect, w, dtype=np.float32) / zoom
-		y = np.linspace(-self.extent_y, self.extent_y, h, dtype=np.float32) / zoom
-		X, Y = np.meshgrid(x, y)
-		Z = X + 1j * Y
-		Z_iter = Z.copy()
-		counts = np.zeros(Z.shape, dtype=np.int32)
-		mask = np.ones(Z.shape, dtype=bool)
+		# Reset working buffers in-place
+		np.copyto(self._Z_iter, self._Z_template)
+		self._Z_iter /= np.float32(zoom)
+		self._counts.fill(0)
+		self._mask.fill(True)
 		for i in range(max_iter):
-			Z_iter[mask] = Z_iter[mask] * Z_iter[mask] + c
-			escaped = np.abs(Z_iter) > 2.0
-			newly = escaped & mask
-			counts[newly] = i
-			mask &= (~escaped)
-			if not mask.any():
+			# z = z^2 + c (in-place)
+			self._Z_iter *= self._Z_iter
+			self._Z_iter += c
+			# Compare squared magnitude to avoid sqrt
+			mod2 = (self._Z_iter.real * self._Z_iter.real) + (self._Z_iter.imag * self._Z_iter.imag)
+			escaped = mod2 > 4.0
+			newly = escaped & self._mask
+			self._counts[newly] = i
+			self._mask &= (~escaped)
+			if not self._mask.any():
 				break
-		counts = counts.astype(np.float32)
+		counts = self._counts.astype(np.float32)
 		if max_iter > 0:
 			counts = counts / float(max_iter)
 		# Apply color mapping adjustments to spread palette usage
@@ -709,20 +760,14 @@ class _FractalBackground:
 		# Color interior (non-escaped) points
 		if self.interior_palette:
 			try:
-				img[mask] = self._palette[0]
+				img[self._mask] = self._palette[0]
 			except Exception:
 				pass
 		else:
 			try:
-				img[mask] = np.array([30, 80, 160], dtype=np.uint8)
+				img[self._mask] = np.array([30, 80, 160], dtype=np.uint8)
 			except Exception:
-				img[mask] = (img[mask] * 0.5).astype(np.uint8)
-		# Log a checksum of the frame to verify updates
-		try:
-			cs = int(np.sum(img))
-			print(f"visuals: fractal frame checksum={cs}")
-		except Exception:
-			pass
+				img[self._mask] = (img[self._mask] * 0.5).astype(np.uint8)
 		return img
 
 	def _to_rgba(self, img_rgb: np.ndarray) -> np.ndarray:
@@ -754,30 +799,54 @@ class _FractalBackground:
 			img[:, :, 2] = 64
 		else:
 			img = self._render_frame(hf_energy=hf_energy, now=now)
-		# Update existing mobject's texture if possible; else replace
-		if self._mode == "image" and self._is_opengl and (self._current_mobject is not None):
+		# Update existing mobject by recreating an image object (robust across backends)
+		if self._mode == "image" and (self._current_mobject is not None):
 			try:
+				from PIL import Image as PILImage
 				rgba = self._to_rgba(img)
-				rgba_f = (rgba.astype(np.float32) / 255.0)
-				self._current_mobject.set_data(rgba_f)  # type: ignore[attr-defined]
-				# Force a re-upload/redraw by nudging opacity very slightly
+				pil = PILImage.fromarray(rgba, mode="RGBA")
+				if self._is_opengl:
+					try:
+						from manim.mobject.opengl.opengl_image_mobject import OpenGLImageMobject  # type: ignore
+						new_im = OpenGLImageMobject(pil)
+					except Exception:
+						new_im = self._build_mobject_cpu(img)
+				else:
+					new_im = self._build_mobject_cpu(img)
 				try:
-					current_opacity = float(self.alpha)
-					self._current_mobject.set_opacity(min(1.0, max(0.0, current_opacity)))
+					new_im.set_opacity(self.alpha)
 				except Exception:
 					pass
+				try:
+					new_im.scale_to_fit_height(float(manim_config.frame_height))
+				except Exception:
+					pass
+				self._current_mobject.become(new_im)
 				return None
-			except Exception as e:
-				print(f"visuals: fractal OpenGL update failed: {e}")
-				self._is_opengl = False
+			except Exception:
+				pass
+		# CPU fallback for image mode (Cairo)
+		if self._mode == "image" and (not self._is_opengl) and (self._current_mobject is not None):
+			try:
+				imobj = self._build_mobject_cpu(img)
+				try:
+					imobj.set_opacity(self.alpha)
+				except Exception:
+					pass
+				try:
+					imobj.scale_to_fit_height(float(manim_config.frame_height))
+				except Exception:
+					pass
+				self._current_mobject.become(imobj)
+				return None
+			except Exception:
+				pass
 		if self._mode == "tiles" and hasattr(self, "_tile_group"):
 			# Update colors of tiles based on downsampled image
 			cols = int(self.cfg.get("tiles_max_cols", 64))
 			rows = int(self.cfg.get("tiles_max_rows", 36))
-			# Downsample image to tiles grid
-			r_idx = np.linspace(0, img.shape[0] - 1, rows).astype(int)
-			c_idx = np.linspace(0, img.shape[1] - 1, cols).astype(int)
-			down = img[np.ix_(r_idx, c_idx)]  # rows x cols x 3
+			# Downsample image to tiles grid (use cached indices)
+			down = img[np.ix_(self._r_idx, self._c_idx)]  # rows x cols x 3
 			k = 0
 			for r in range(rows):
 				for c in range(cols):
@@ -790,10 +859,7 @@ class _FractalBackground:
 					hex_color = f"#{r8:02x}{g8:02x}{b8:02x}"
 					self._tile_group[k].set_fill(color=hex_color, opacity=self.alpha)
 					self._tile_group[k].set_stroke(width=0)
-					try:
-						self._tile_group[k].invalidate_shader_data()  # force GL uniform refresh
-					except Exception:
-						pass
+					# Avoid per-tile shader invalidation; group-wide invalidation below is enough
 					k += 1
 			# Invalidate group once per refresh as well
 			try:
