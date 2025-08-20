@@ -14,14 +14,14 @@ bands:
 # Smoothing (attack-release EMA)
 smoother:
   attack: 0.6
-  release: 0.15
+  release: 0.35
 
 # Normalization
 normalizer:
-  mode: peak  # 'peak' or 'percentile'
-  window: 60
-  decay: 0.02
-  floor: 1.0e-6
+  mode: percentile  # 'peak' or 'percentile'
+  window: 120
+  decay: 0.05
+  floor: 1.0e-3
 
 # Beat detector
 beat:

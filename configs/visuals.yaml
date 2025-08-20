@@ -1,8 +1,56 @@
 # Visuals configuration
-renderer: opengl   # 'opengl' recommended for real-time
+renderer: opengl  # 'opengl' recommended for real-time
 fps: 60
 num_bands: 32
-min_height: 0.05
+min_height: 0.0
 color_scheme: ["BLUE", "GREEN", "RED"]
+bar_opacity: 0.5
+scene_scale: 5
+baseline_y: -3.0
+scene_width: 12
+
+# Shapes driven by low frequencies
+shapes:
+  enabled: true
+  low_bands_count: 4
+  spawn_threshold: 0.6
+  cooldown_ms: 150
+  max_active: 25
+  lifespan_s: 1.2
+  drift_y: 0
+  # Set to 0 to only fade out without drifting
+  size_range: [0.2, 0.8]
+  shape_types: ["circle", "triangle", "square"]
+  colors: ["PURPLE"]
+  opacity_range: [0.9, 0.0]
 
 
+
+# Fractal background driven by chosen bands
+fractal:
+  enabled: true
+  only: true
+  bands_range: [18, 26]
+  resolution: [64, 36]
+  mode: "tiles"          # cheaper than image mode for real-time
+  tiles_max_cols: 64     # try 64x36 first; increase if smooth
+  tiles_max_rows: 36
+  tiles_compute_at_grid: true
+  accel: "numba"         # avoids Numba JIT startup delay
+  max_iter: 200           # start lower; raise slowly if you have headroom
+  iters_per_frame: 4
+  reuse_across_frames: true
+  param_reset_threshold: 0.04
+  update_fps: 30
+  alpha: 0.9
+  zoom_range: [0.9, 1.5]
+  julia_strength: 1.4
+  color_speed: 0.05
+  color_gamma: 0.9
+  color_scale: 1.6
+  color_offset: 0.3
+  interior_palette: true
+  palette: ["GREEN", "PURPLE", "RED", "YELLOW"]
+  overlay: true
+  extent_x: 0.8
+  extent_y: 1
