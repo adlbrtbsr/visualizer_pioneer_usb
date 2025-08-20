@@ -146,9 +146,15 @@ class SpectrumBarsScene(Scene):
 			"zoom_range": [0.95, 1.6],
 			"julia_strength": 0.7,
 			"color_speed": 0.35,
+			"color_gamma": 1.0,
+			"color_scale": 1.0,
+			"color_offset": 0.0,
+			"interior_palette": False,
 			"palette": None,
 			"seed": None,
 			"overlay": False,
+			"extent_x": 1.5,
+			"extent_y": 1.5,
 			"debug_force_seconds": 0.0,
 			"debug_constant": None,
 			"debug_outline": False,
@@ -176,7 +182,37 @@ class SpectrumBarsScene(Scene):
 		out["zoom_range"] = [float(max(0.1, zr[0])), float(max(zr[0], zr[1]))]
 		out["julia_strength"] = float(np.clip(float(out.get("julia_strength", 0.7)), 0.0, 2.0))
 		out["color_speed"] = float(max(0.0, float(out.get("color_speed", 0.35))))
+		# Color mapping controls
+		try:
+			out["color_gamma"] = float(max(0.01, float(out.get("color_gamma", 1.0))))
+		except Exception:
+			out["color_gamma"] = 1.0
+		try:
+			out["color_scale"] = float(max(0.01, float(out.get("color_scale", 1.0))))
+		except Exception:
+			out["color_scale"] = 1.0
+		try:
+			out["color_offset"] = float(out.get("color_offset", 0.0))
+		except Exception:
+			out["color_offset"] = 0.0
+		out["interior_palette"] = bool(out.get("interior_palette", False))
 		out["overlay"] = bool(out.get("overlay", False))
+		# Domain extents (controls how far the fractal stretches in view)
+		ext = out.get("extent", None)
+		try:
+			default_ext = float(1.5)
+		except Exception:
+			default_ext = 1.5
+		ext_x = out.get("extent_x", ext if ext is not None else default_ext)
+		ext_y = out.get("extent_y", ext if ext is not None else default_ext)
+		try:
+			out["extent_x"] = float(max(0.1, float(ext_x)))
+		except Exception:
+			out["extent_x"] = default_ext
+		try:
+			out["extent_y"] = float(max(0.1, float(ext_y)))
+		except Exception:
+			out["extent_y"] = default_ext
 		out["debug_force_seconds"] = float(max(0.0, float(out.get("debug_force_seconds", 0.0))))
 		dbg_c = out.get("debug_constant", None)
 		out["debug_constant"] = None if dbg_c is None else float(np.clip(float(dbg_c), 0.0, 1.0))
@@ -493,9 +529,15 @@ class _FractalBackground:
 		self.max_iter_base = int(cfg["max_iter"])
 		self.julia_strength = float(cfg["julia_strength"])
 		self.zoom_min, self.zoom_max = float(cfg["zoom_range"][0]), float(cfg["zoom_range"][1])
+		self.extent_x = float(cfg.get("extent_x", 1.5))
+		self.extent_y = float(cfg.get("extent_y", 1.5))
 		self.update_interval = 1.0 / float(max(1, int(cfg["update_fps"])) )
 		self.alpha = float(cfg["alpha"])
 		self.color_speed = float(cfg["color_speed"]) 
+		self.color_gamma = float(cfg.get("color_gamma", 1.0))
+		self.color_scale = float(cfg.get("color_scale", 1.0))
+		self.color_offset = float(cfg.get("color_offset", 0.0))
+		self.interior_palette = bool(cfg.get("interior_palette", False))
 		self._rng = random.Random(int(cfg["seed"])) if cfg.get("seed") is not None else random.Random()
 		self._last_update_time = -1e9
 		self._palette = self._build_palette(cfg.get("palette") or fallback_colors)
@@ -613,8 +655,8 @@ class _FractalBackground:
 		c = radius * np.exp(1j * angle) * self.julia_strength
 		w, h = self.width, self.height
 		aspect = float(w) / float(h)
-		x = np.linspace(-1.5 * aspect, 1.5 * aspect, w, dtype=np.float32) / zoom
-		y = np.linspace(-1.5, 1.5, h, dtype=np.float32) / zoom
+		x = np.linspace(-self.extent_x * aspect, self.extent_x * aspect, w, dtype=np.float32) / zoom
+		y = np.linspace(-self.extent_y, self.extent_y, h, dtype=np.float32) / zoom
 		X, Y = np.meshgrid(x, y)
 		Z = X + 1j * Y
 		Z_iter = Z.copy()
@@ -631,13 +673,31 @@ class _FractalBackground:
 		counts = counts.astype(np.float32)
 		if max_iter > 0:
 			counts = counts / float(max_iter)
-		idx = np.clip((counts * 255.0).astype(np.int32), 0, 255)
-		img = self._palette[idx]
-		# Give interior (non-escaped) points a visible tint to ensure background is noticeable
+		# Apply color mapping adjustments to spread palette usage
+		mapped = counts
 		try:
-			img[mask] = np.array([30, 80, 160], dtype=np.uint8)
+			if self.color_gamma != 1.0:
+				mapped = np.power(np.clip(mapped, 0.0, 1.0), 1.0 / max(1e-6, self.color_gamma))
 		except Exception:
-			img[mask] = (img[mask] * 0.5).astype(np.uint8)
+			pass
+		try:
+			if self.color_scale != 1.0 or self.color_offset != 0.0:
+				mapped = np.clip(mapped * self.color_scale + self.color_offset, 0.0, 1.0)
+		except Exception:
+			pass
+		idx = np.clip((mapped * 255.0).astype(np.int32), 0, 255)
+		img = self._palette[idx]
+		# Color interior (non-escaped) points
+		if self.interior_palette:
+			try:
+				img[mask] = self._palette[0]
+			except Exception:
+				pass
+		else:
+			try:
+				img[mask] = np.array([30, 80, 160], dtype=np.uint8)
+			except Exception:
+				img[mask] = (img[mask] * 0.5).astype(np.uint8)
 		# Log a checksum of the frame to verify updates
 		try:
 			cs = int(np.sum(img))

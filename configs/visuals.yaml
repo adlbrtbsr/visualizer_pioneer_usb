@@ -41,9 +41,17 @@ fractal:
   zoom_range: [0.95, 1.6]
   julia_strength: 0.7
   color_speed: 0.35
-  palette: ["BLUE", "PURPLE", "RED"]
+  # Expand palette usage for more colors
+  color_gamma: 0.8
+  color_scale: 1.6
+  color_offset: 0.1
+  interior_palette: true
+  palette: ["GREEN", "PURPLE", "RED", "YELLOW"]
   seed: null
   overlay: true
+  # Spread the fractal outward (larger = thinner look)
+  extent_x: 0.8
+  extent_y: 1
   # Debug options
   debug_force_seconds: 0
   debug_constant: 0
