@@ -270,6 +270,7 @@ def main():
                 uniform float u_trap_r;      // circle trap radius
                 uniform float u_trap_mix;    // mix factor 0..1
                 uniform float u_trap_rot;    // rotation for cross trap
+                uniform float u_bail;        // bailout radius for escape and smoothing
 
                 // High-contrast HSV palette
                 vec3 hsv2rgb(vec3 c) {
@@ -302,7 +303,7 @@ def main():
                     float trap_min_cross = 1e9;
                     float cst = cos(u_trap_rot), snt = sin(u_trap_rot);
                     mat2 RT = mat2(cst, -snt, snt, cst);
-                    for(i=0; i<u_max_iter && dot(z,z) <= 4.0; i++){
+                    for(i=0; i<u_max_iter && dot(z,z) <= (u_bail * u_bail); i++){
                         // Burning Ship blend (abs before power)
                         vec2 zb = mix(z, vec2(abs(z.x), abs(z.y)), clamp(u_ship, 0.0, 1.0));
                         float r = length(zb);
@@ -324,10 +325,13 @@ def main():
                         // Smooth-ish coloring for general power
                         float r2 = dot(z,z);
                         float log_zn = 0.5 * log(r2);
-                        float nu = log(log_zn / log(2.0)) / max(log(u_power), 1e-4);
+                        float nu = log(log_zn / log(max(u_bail, 1.01))) / max(log(u_power), 1e-4);
                         mu = float(i) + 1.0 - nu;
                     }
 
+                    // Add very small jitter to mu to break iso-contour banding during zoom
+                    float mu_jitter = (fract(sin(dot(gl_FragCoord.xy + vec2(mu), vec2(127.1, 311.7))) * 43758.5453) - 0.5) * 0.15;
+                    mu += mu_jitter;
                     // Map to vivid color using HSV (distinguished colors)
                     float t = mu / float(u_max_iter);
                     // Palette A (default) — remove angle branch-cut seam by avoiding atan
@@ -339,8 +343,8 @@ def main():
                     float satA = clamp(0.8 + 0.2 * u_high, 0.75, 1.0);
                     float valA = clamp(0.75 + 0.25 * u_mid, 0.70, 1.0);
                     vec3 colA = hsv2rgb(vec3(hueA, satA, valA));
-                    // Palette B (alternative, more contrasting)
-                    float hueB = fract(0.55 + 0.75 * (1.0 - t) + 0.08 * sin(20.0 * t));
+                    // Palette B (alternative, more contrasting) — avoid discontinuous wrapping
+                    float hueB = 0.5 + 0.5 * sin(6.28318530718 * (0.25 + 0.6 * (1.0 - t) + 0.06 * sin(20.0 * t)));
                     float satB = clamp(0.9 - 0.3 * u_high, 0.6, 1.0);
                     float valB = clamp(0.8 + 0.2 * u_bass, 0.7, 1.0);
                     vec3 colB = hsv2rgb(vec3(hueB, satB, valB));
@@ -365,7 +369,10 @@ def main():
                     hdr *= expo;
                     vec3 mapped = hdr / (hdr + vec3(1.0)); // Reinhard
                     mapped = pow(mapped, vec3(1.0/2.2));   // gamma
-                    f_color = vec4(clamp(mapped, 0.0, 1.0), 1.0);
+                    // Add subtle screen-space dithering to hide gradient banding, more visible during zoom
+                    float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453123) - 0.5) * (2.0/255.0);
+                    mapped = clamp(mapped + vec3(dither), 0.0, 1.0);
+                    f_color = vec4(mapped, 1.0);
                 }
             """
         ),
@@ -565,6 +572,7 @@ def main():
             if rad > max_rad and rad > 1e-6:
                 center = EDGE_CENTER + (delta_c * (max_rad / rad))
 
+            # Iterations based only on energy (reverted for performance)
             u_iters = int(iter_base + 120 * np.clip(energy, 0.0, 1.5))
             u_iters = int(np.clip(u_iters, 100, 360))
 
@@ -578,6 +586,8 @@ def main():
             set_uniform_if_present(prog, 'u_high', float(high_s))
             set_uniform_if_present(prog, 'u_energy', float(np.clip(energy, 0.0, 1.5)))
             set_uniform_if_present(prog, 'u_view_uv_center', (0.5, 0.5))
+            # Bailout radius adjusted for larger visual window
+            set_uniform_if_present(prog, 'u_bail', float(8.0))
             # Julia parameters (smoothed)
             set_uniform_if_present(prog, 'u_c', (float(c_param[0]), float(c_param[1])))
             target_power = float(np.clip(2.0 + 0.3 * (float(np.clip(high_s, 0.0, 1.0)) - 0.3), 1.8, 2.3))
