@@ -1,15 +1,15 @@
-# Visuals configuration
-renderer: opengl  # 'opengl' recommended for real-time
+renderer: opengl
 fps: 60
 num_bands: 32
 min_height: 0.0
-color_scheme: ["BLUE", "GREEN", "RED"]
+color_scheme:
+- BLUE
+- GREEN
+- RED
 bar_opacity: 0.5
 scene_scale: 5
 baseline_y: -3.0
 scene_width: 12
-
-# Shapes driven by low frequencies
 shapes:
   enabled: true
   low_bands_count: 4
@@ -18,19 +18,32 @@ shapes:
   max_active: 25
   lifespan_s: 1.2
   drift_y: 0
-  # Set to 0 to only fade out without drifting
-  size_range: [0.2, 0.8]
-  shape_types: ["circle", "triangle", "square"]
-  colors: ["PURPLE"]
-  opacity_range: [0.9, 0.0]
-
-
-
-# Fractal background driven by chosen bands
+  size_range:
+  - 0.2
+  - 0.8
+  shape_types:
+  - circle
+  - triangle
+  - square
+  colors:
+  - PURPLE
+  opacity_range:
+  - 0.9
+  - 0.0
 live_fractal_intensity:
   master: 1.0
-  exposure: 1.0
-  glow_gain: 1.0
-  trap_mix_gain: 1.0
-  motion_gain: 1.0
-  iteration_gain: 1.0
+  exposure: 0.6620000004768372
+  glow_gain: 1.628999948501587
+  trap_mix_gain: 1.1859999895095825
+  motion_gain: 0.24699999392032623
+  iteration_gain: 1.9459999799728394
+  scale: 2.7750000953674316
+  iterations_base: 291.3399963378906
+  bailout_radius: 16.0
+  morph_gain: 0.0
+  ship_gain: 0.14399999380111694
+  trap_radius_scale: 1.0
+  contrast: 1.784000039100647
+  palette_id: 3
+  hue_offset: 0.45899999141693115
+  palette_saturation: 0.722000002861023

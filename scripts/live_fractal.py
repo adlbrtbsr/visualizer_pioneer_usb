@@ -84,22 +84,48 @@ class TkControlPanel:
 
                 add_slider(0, "Master", "master", 0.0, 2.0, 0.01)
                 add_slider(1, "Exposure", "exposure", 0.6, 1.6, 0.01)
-                add_slider(2, "Motion Gain", "motion_gain", 0.0, 3.0, 0.01)
-                add_slider(3, "Iteration Gain", "iteration_gain", 0.5, 2.0, 0.01)
-                add_slider(4, "Trap Mix Gain", "trap_mix_gain", 0.0, 2.0, 0.01)
-                add_slider(5, "Glow Gain", "glow_gain", 0.0, 2.0, 0.01)
+                add_slider(1, "Contrast", "contrast", 0.5, 2.0, 0.01)
+                # Palette controls
+                add_slider(2, "Palette (0..3)", "palette_id", 0, 3, 1.0)
+                add_slider(3, "Hue Offset", "hue_offset", 0.0, 1.0, 0.01)
+                add_slider(4, "Palette Saturation", "palette_saturation", 0.0, 1.0, 0.01)
+                add_slider(5, "Motion Gain", "motion_gain", 0.0, 3.0, 0.01)
+                add_slider(6, "Iteration Gain", "iteration_gain", 0.5, 2.0, 0.01)
+                add_slider(7, "Trap Mix Gain", "trap_mix_gain", 0.0, 2.0, 0.01)
+                add_slider(8, "Glow Gain", "glow_gain", 0.0, 2.0, 0.01)
+                # New customization sliders
+                add_slider(9, "Zoom (Scale)", "scale", 0.4, 4.0, 0.01)
+                add_slider(10, "Iterations Base", "iterations_base", 60.0, 300.0, 1.0)
+                add_slider(11, "Bailout Radius", "bailout_radius", 2.0, 16.0, 0.1)
+                add_slider(12, "Morph Gain", "morph_gain", 0.0, 2.0, 0.01)
+                add_slider(13, "Ship Gain", "ship_gain", 0.0, 2.0, 0.01)
+                add_slider(14, "Trap Radius Scale", "trap_radius_scale", 0.5, 2.0, 0.01)
 
                 btn_frame = tk.Frame(self._root)
-                btn_frame.grid(row=6, column=0, columnspan=2, pady=8)
+                btn_frame.grid(row=15, column=0, columnspan=2, pady=8)
                 def do_reset():
                     self.settings.master = 1.0
                     self.settings.exposure = 1.0
+                    self.settings.contrast = 1.0
                     self.settings.motion_gain = 1.0
                     self.settings.iteration_gain = 1.0
                     self.settings.trap_mix_gain = 1.0
                     self.settings.glow_gain = 1.0
+                    self.settings.palette_id = 0
+                    self.settings.hue_offset = 0.0
+                    self.settings.palette_saturation = 0.9
+                    self.settings.scale = 2.4
+                    self.settings.iterations_base = 150.0
+                    self.settings.bailout_radius = 8.0
+                    self.settings.morph_gain = 1.0
+                    self.settings.ship_gain = 1.0
+                    self.settings.trap_radius_scale = 1.0
                     # Update scales visually
-                    for k in ["master","exposure","motion_gain","iteration_gain","trap_mix_gain","glow_gain"]:
+                    for k in [
+                        "master","exposure","contrast","palette_id","hue_offset","palette_saturation",
+                        "motion_gain","iteration_gain","trap_mix_gain","glow_gain",
+                        "scale","iterations_base","bailout_radius","morph_gain","ship_gain","trap_radius_scale"
+                    ]:
                         try:
                             self._vars[k+"_scale"].set(float(getattr(self.settings, k)))
                         except Exception:
@@ -148,6 +174,17 @@ class VisualIntensitySettings:
     trap_mix_gain: float = 1.0
     motion_gain: float = 1.0
     iteration_gain: float = 1.0
+    # Extended customization
+    scale: float = 2.4
+    iterations_base: float = 150.0
+    bailout_radius: float = 8.0
+    morph_gain: float = 1.0
+    ship_gain: float = 1.0
+    trap_radius_scale: float = 1.0
+    contrast: float = 1.0
+    palette_id: int = 0
+    hue_offset: float = 0.0
+    palette_saturation: float = 0.9
 
     @classmethod
     def from_yaml(cls, path: Path):
@@ -166,6 +203,16 @@ class VisualIntensitySettings:
                         trap_mix_gain=float(node.get("trap_mix_gain", 1.0)),
                         motion_gain=float(node.get("motion_gain", 1.0)),
                         iteration_gain=float(node.get("iteration_gain", 1.0)),
+                        scale=float(node.get("scale", 2.4)),
+                        iterations_base=float(node.get("iterations_base", 150.0)),
+                        bailout_radius=float(node.get("bailout_radius", 8.0)),
+                        morph_gain=float(node.get("morph_gain", 1.0)),
+                        ship_gain=float(node.get("ship_gain", 1.0)),
+                        trap_radius_scale=float(node.get("trap_radius_scale", 1.0)),
+                        contrast=float(node.get("contrast", 1.0)),
+                        palette_id=int(node.get("palette_id", 0)),
+                        hue_offset=float(node.get("hue_offset", 0.0)),
+                        palette_saturation=float(node.get("palette_saturation", 0.9)),
                     )
         except Exception:
             pass
@@ -187,6 +234,16 @@ def _save_visual_intensity_yaml(settings: VisualIntensitySettings, path: Path) -
             "trap_mix_gain": float(settings.trap_mix_gain),
             "motion_gain": float(settings.motion_gain),
             "iteration_gain": float(settings.iteration_gain),
+            "scale": float(settings.scale),
+            "iterations_base": float(settings.iterations_base),
+            "bailout_radius": float(settings.bailout_radius),
+            "morph_gain": float(settings.morph_gain),
+            "ship_gain": float(settings.ship_gain),
+            "trap_radius_scale": float(settings.trap_radius_scale),
+            "contrast": float(settings.contrast),
+            "palette_id": int(settings.palette_id),
+            "hue_offset": float(settings.hue_offset),
+            "palette_saturation": float(settings.palette_saturation),
         }
         data["live_fractal_intensity"] = block
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -394,6 +451,8 @@ def main():
     imgui_impl = None
     ui_visible = True
     tk_panel = None
+    # Visual intensity settings (optional YAML override)
+    vis_settings = VisualIntensitySettings.from_yaml(PROJECT_ROOT / "configs" / "visuals.yaml")
     if imgui is not None and GlfwRenderer is not None:
         try:
             imgui.create_context()
@@ -465,6 +524,10 @@ def main():
                 uniform float u_trap_mix;    // mix factor 0..1
                 uniform float u_trap_rot;    // rotation for cross trap
                 uniform float u_bail;        // bailout radius for escape and smoothing
+                uniform float u_contrast;    // post-tonemap contrast (around 0.5)
+                uniform int   u_palette_id;  // 0: HSV, 1: Fire, 2: Ice, 3: Neon
+                uniform float u_hue_offset;  // 0..1 hue offset
+                uniform float u_palette_sat; // palette saturation bias
 
                 // High-contrast HSV palette
                 vec3 hsv2rgb(vec3 c) {
@@ -528,18 +591,22 @@ def main():
                     mu += mu_jitter;
                     // Map to color purely from low-frequency (bass) energy
                     float t = mu / float(u_max_iter);
-                    float hue = fract(0.02 + 0.96 * clamp(u_bass, 0.0, 1.0));
-                    float sat = 0.9;
+                    float hue = fract(u_hue_offset + 0.02 + 0.96 * clamp(u_bass, 0.0, 1.0));
+                    float sat = clamp(u_palette_sat, 0.0, 1.0);
                     // Keep structural contrast via iteration-based brightness only
                     float val = mix(0.6, 1.0, clamp(t, 0.0, 1.0));
-                    vec3 col = hsv2rgb(vec3(hue, sat, val));
+                    vec3 col0 = hsv2rgb(vec3(hue, sat, val));
+                    vec3 col1 = mix(vec3(0.9, 0.4, 0.05), vec3(1.0, 0.1, 0.0), pow(clamp(t,0.0,1.0), 0.5));
+                    vec3 col2 = mix(vec3(0.1, 0.8, 0.9), vec3(0.0, 0.2, 0.8), clamp(t,0.0,1.0));
+                    vec3 col3 = hsv2rgb(vec3(fract(hue + 0.25 * clamp(u_high, 0.0, 1.0)), 1.0, mix(0.7, 1.1, clamp(u_mid, 0.0, 1.0))));
+                    vec3 col = (u_palette_id == 0) ? col0 : (u_palette_id == 1 ? col1 : (u_palette_id == 2 ? col2 : col3));
 
                     // Orbit-trap interior/exterior enhancement
                     float trap_c = exp(-8.0 * trap_min_circ);
                     float trap_x = exp(-8.0 * trap_min_cross);
                     float trap = clamp(max(trap_c, trap_x), 0.0, 1.0);
-                    float trap_hue = fract(0.1 + 0.35 * trap + 0.2 * u_bass);
-                    vec3 trap_col = hsv2rgb(vec3(trap_hue, 0.85, clamp(0.6 + 0.4 * trap, 0.6, 1.0)));
+                    float trap_hue = fract(u_hue_offset + 0.1 + 0.35 * trap + 0.2 * u_bass);
+                    vec3 trap_col = hsv2rgb(vec3(trap_hue, clamp(0.6 + 0.25 * u_palette_sat, 0.0, 1.0), clamp(0.6 + 0.4 * trap, 0.6, 1.0)));
                     col = mix(col, trap_col, clamp(u_trap_mix, 0.0, 1.0));
 
                     // Bass adds warm glow (reduced)
@@ -551,6 +618,9 @@ def main():
                     hdr *= expo;
                     vec3 mapped = hdr / (hdr + vec3(1.0)); // Reinhard
                     mapped = pow(mapped, vec3(1.0/2.2));   // gamma
+                    // Apply user contrast around mid-gray
+                    float c = clamp(u_contrast, 0.2, 3.0);
+                    mapped = clamp((mapped - vec3(0.5)) * c + vec3(0.5), 0.0, 1.0);
                     // Add subtle screen-space dithering to hide gradient banding, more visible during zoom
                     float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453123) - 0.5) * (2.0/255.0);
                     mapped = clamp(mapped + vec3(dither), 0.0, 1.0);
@@ -579,8 +649,7 @@ def main():
     band_normalizer = Normalizer(mode="percentile", window=90, decay=0.02)
     band_smoother = Smoother(attack=0.6, release=0.3)
 
-    # Visual intensity settings (optional YAML override)
-    vis_settings = VisualIntensitySettings.from_yaml(PROJECT_ROOT / "configs" / "visuals.yaml")
+    # vis_settings already initialized above
 
     # Audio responsiveness helpers
     agc_level = 1.0  # automatic gain control running level (EMA of 90th percentile)
@@ -692,10 +761,20 @@ def main():
             if r_state == glfw.PRESS and (globals().setdefault('_prev_r_key', glfw.RELEASE) != glfw.PRESS):
                 vis_settings.master = 1.0
                 vis_settings.exposure = 1.0
+                vis_settings.contrast = 1.0
                 vis_settings.motion_gain = 1.0
                 vis_settings.iteration_gain = 1.0
                 vis_settings.trap_mix_gain = 1.0
                 vis_settings.glow_gain = 1.0
+                vis_settings.palette_id = 0
+                vis_settings.hue_offset = 0.0
+                vis_settings.palette_saturation = 0.9
+                vis_settings.scale = 2.4
+                vis_settings.iterations_base = 150.0
+                vis_settings.bailout_radius = 8.0
+                vis_settings.morph_gain = 1.0
+                vis_settings.ship_gain = 1.0
+                vis_settings.trap_radius_scale = 1.0
                 print("[UI] Settings reset to defaults.")
             globals()['_prev_r_key'] = r_state
 
@@ -764,8 +843,8 @@ def main():
 
             # No time-based drift: all motion driven by audio only
 
-            # Fixed zoom level (no audio-driven zoom)
-            scale = 2.4
+            # Zoom level from settings
+            scale = float(getattr(vis_settings, 'scale', 2.4))
 
             # Audio-driven Julia parameter c (smoothed, narrow range) and power (smoothed)
             # No baseline rotation: only audio drives omega
@@ -787,6 +866,9 @@ def main():
             # Morph parameters driven only by audio
             morph_target = float(np.clip(0.2 + 1.8 * (float(mid_s) - 0.25), 0.0, 1.0))
             ship_target = float(np.clip(2.2 * (float(high_s) - 0.4), 0.0, 1.0))
+            # Apply user gain controls
+            morph_target *= float(getattr(vis_settings, 'morph_gain', 1.0)) * float(getattr(vis_settings, 'master', 1.0))
+            ship_target *= float(getattr(vis_settings, 'ship_gain', 1.0)) * float(getattr(vis_settings, 'master', 1.0))
             if (not is_active) or (low_energy_accum > 0.4):
                 morph_target = 0.35
                 ship_target = 0.0
@@ -824,8 +906,9 @@ def main():
             if rad > max_rad and rad > 1e-6:
                 center = EDGE_CENTER + (delta_c * (max_rad / rad))
 
-            # Iterations based only on energy (reverted for performance)
-            u_iters = int(iter_base + 120 * np.clip(energy, 0.0, 1.5))
+            # Iterations based on user base + energy (reverted for performance)
+            base_iters = float(getattr(vis_settings, 'iterations_base', iter_base))
+            u_iters = int(base_iters + 120 * np.clip(energy, 0.0, 1.5))
             # Apply iteration gain and master, then clamp to safe range
             u_iters = int(u_iters * float(vis_settings.iteration_gain) * float(vis_settings.master))
             u_iters = int(np.clip(u_iters, 100, 360))
@@ -844,8 +927,14 @@ def main():
             energy_scaled = float(np.clip(energy * float(vis_settings.exposure) * float(vis_settings.master), 0.0, 1.5))
             set_uniform_if_present(prog, 'u_energy', energy_scaled)
             set_uniform_if_present(prog, 'u_view_uv_center', (0.5, 0.5))
-            # Bailout radius adjusted for larger visual window
-            set_uniform_if_present(prog, 'u_bail', float(8.0))
+            # Bailout radius from settings
+            set_uniform_if_present(prog, 'u_bail', float(getattr(vis_settings, 'bailout_radius', 8.0)))
+            # Contrast uniform
+            set_uniform_if_present(prog, 'u_contrast', float(getattr(vis_settings, 'contrast', 1.0)))
+            # Palette uniforms
+            set_uniform_if_present(prog, 'u_palette_id', int(getattr(vis_settings, 'palette_id', 0)))
+            set_uniform_if_present(prog, 'u_hue_offset', float(getattr(vis_settings, 'hue_offset', 0.0)))
+            set_uniform_if_present(prog, 'u_palette_sat', float(getattr(vis_settings, 'palette_saturation', 0.9)))
             # Julia parameters (smoothed)
             set_uniform_if_present(prog, 'u_c', (float(c_param[0]), float(c_param[1])))
             target_power = float(np.clip(2.0 + 0.3 * (float(np.clip(high_s, 0.0, 1.0)) - 0.3), 1.8, 2.3))
@@ -862,6 +951,7 @@ def main():
             set_uniform_if_present(prog, 'u_shear', float(shear_param))
             # Orbit-trap uniforms (audio-driven)
             trap_r = float(np.clip(0.32 + 0.25 * (float(bass_s) - 0.4), 0.1, 0.7))
+            trap_r *= float(getattr(vis_settings, 'trap_radius_scale', 1.0))
             trap_mix = float(np.clip(0.15 + 0.6 * float(energy), 0.1, 1))
             trap_rot = float((0.5 * angle_accum) + 1.2 * float(np.clip(high_s - 0.3, 0.0, 1.0)))
             if not is_active:
@@ -885,18 +975,40 @@ def main():
                         changed = False
                         _c, vis_settings.master = imgui.slider_float("Master", float(vis_settings.master), 0.0, 2.0); changed = changed or _c
                         _c, vis_settings.exposure = imgui.slider_float("Exposure", float(vis_settings.exposure), 0.6, 1.6); changed = changed or _c
+                        _c, vis_settings.contrast = imgui.slider_float("Contrast", float(vis_settings.contrast), 0.5, 2.0); changed = changed or _c
+                        # Palette controls
+                        _c, vis_settings.palette_id = imgui.slider_int("Palette", int(vis_settings.palette_id), 0, 3); changed = changed or _c
+                        _c, vis_settings.hue_offset = imgui.slider_float("Hue Offset", float(vis_settings.hue_offset), 0.0, 1.0); changed = changed or _c
+                        _c, vis_settings.palette_saturation = imgui.slider_float("Palette Saturation", float(vis_settings.palette_saturation), 0.0, 1.0); changed = changed or _c
                         _c, vis_settings.motion_gain = imgui.slider_float("Motion Gain", float(vis_settings.motion_gain), 0.0, 3.0); changed = changed or _c
                         _c, vis_settings.iteration_gain = imgui.slider_float("Iteration Gain", float(vis_settings.iteration_gain), 0.5, 2.0); changed = changed or _c
                         _c, vis_settings.trap_mix_gain = imgui.slider_float("Trap Mix Gain", float(vis_settings.trap_mix_gain), 0.0, 2.0); changed = changed or _c
                         _c, vis_settings.glow_gain = imgui.slider_float("Glow Gain", float(vis_settings.glow_gain), 0.0, 2.0); changed = changed or _c
+                        # New customization controls
+                        _c, vis_settings.scale = imgui.slider_float("Zoom (Scale)", float(vis_settings.scale), 0.4, 4.0); changed = changed or _c
+                        _c, vis_settings.iterations_base = imgui.slider_float("Iterations Base", float(vis_settings.iterations_base), 60.0, 300.0); changed = changed or _c
+                        _c, vis_settings.bailout_radius = imgui.slider_float("Bailout Radius", float(vis_settings.bailout_radius), 2.0, 16.0); changed = changed or _c
+                        _c, vis_settings.morph_gain = imgui.slider_float("Morph Gain", float(vis_settings.morph_gain), 0.0, 2.0); changed = changed or _c
+                        _c, vis_settings.ship_gain = imgui.slider_float("Ship Gain", float(vis_settings.ship_gain), 0.0, 2.0); changed = changed or _c
+                        _c, vis_settings.trap_radius_scale = imgui.slider_float("Trap Radius Scale", float(vis_settings.trap_radius_scale), 0.5, 2.0); changed = changed or _c
 
                         if imgui.button("Reset"):
                             vis_settings.master = 1.0
                             vis_settings.exposure = 1.0
+                            vis_settings.contrast = 1.0
                             vis_settings.motion_gain = 1.0
                             vis_settings.iteration_gain = 1.0
                             vis_settings.trap_mix_gain = 1.0
                             vis_settings.glow_gain = 1.0
+                            vis_settings.palette_id = 0
+                            vis_settings.hue_offset = 0.0
+                            vis_settings.palette_saturation = 0.9
+                            vis_settings.scale = 2.4
+                            vis_settings.iterations_base = 150.0
+                            vis_settings.bailout_radius = 8.0
+                            vis_settings.morph_gain = 1.0
+                            vis_settings.ship_gain = 1.0
+                            vis_settings.trap_radius_scale = 1.0
                         imgui.same_line()
                         if imgui.button("Save (Ctrl+S)") or pending_save:
                             try:
