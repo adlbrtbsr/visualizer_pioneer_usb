@@ -207,6 +207,7 @@ class AudioCapture:
 
             # Try to open stream; for loopback, probe a few likely channel counts
             def _open_stream(ch: int):
+                # For WASAPI loopback, use the OUTPUT device index directly with WasapiSettings(loopback=True)
                 return sd.InputStream(
                     device=device_index,
                     samplerate=samplerate,
@@ -220,16 +221,23 @@ class AudioCapture:
 
             open_ok = False
             last_exc: Optional[Exception] = None
-            # Build channel candidates. Try user-requested first, then device-reported, then common fallbacks
-            channel_candidates = []
-            if requested_channels and requested_channels not in channel_candidates:
-                channel_candidates.append(requested_channels)
-            if self.config.loopback and available_out_channels > 0 and available_out_channels not in channel_candidates:
-                channel_candidates.append(available_out_channels)
-            # Common practical options
-            for c in [2, 4, 1, 6, 8]:
-                if c not in channel_candidates:
-                    channel_candidates.append(c)
+            # Build channel candidates
+            if self.config.loopback:
+                # For WASAPI loopback, commonly stereo; try stereo then mono regardless of reported caps
+                channel_candidates = []
+                for c in [2, 1]:
+                    if c not in channel_candidates:
+                        channel_candidates.append(c)
+            else:
+                channel_candidates = []
+                if requested_channels and requested_channels not in channel_candidates:
+                    channel_candidates.append(requested_channels)
+                if available_in_channels > 0 and available_in_channels not in channel_candidates:
+                    channel_candidates.append(available_in_channels)
+                # Common practical options
+                for c in [2, 1, 4, 6, 8]:
+                    if c not in channel_candidates:
+                        channel_candidates.append(c)
             for ch in channel_candidates:
                 try:
                     stream = _open_stream(ch)
@@ -241,6 +249,26 @@ class AudioCapture:
                     break
                 except Exception as e:
                     last_exc = e
+                    # If host API specific info is incompatible, retry without extra_settings
+                    if isinstance(e, Exception) and "Incompatible host API specific stream info" in str(e):
+                        try:
+                            stream = sd.InputStream(
+                                device=device_index,
+                                samplerate=samplerate,
+                                channels=ch,
+                                dtype=self.config.dtype,
+                                blocksize=self.config.block_size,
+                                latency=self.config.latency,
+                                callback=self._callback,
+                            )
+                            stream.start()
+                            self._stream = stream
+                            requested_channels = ch
+                            open_ok = True
+                            break
+                        except Exception as e2:
+                            last_exc = e2
+                            continue
                     continue
             if not open_ok:
                 self._stream = None

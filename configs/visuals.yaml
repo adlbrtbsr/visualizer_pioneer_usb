@@ -1,15 +1,15 @@
-# Visuals configuration
-renderer: opengl  # 'opengl' recommended for real-time
+renderer: opengl
 fps: 60
 num_bands: 32
 min_height: 0.0
-color_scheme: ["BLUE", "GREEN", "RED"]
+color_scheme:
+- BLUE
+- GREEN
+- RED
 bar_opacity: 0.5
 scene_scale: 5
 baseline_y: -3.0
 scene_width: 12
-
-# Shapes driven by low frequencies
 shapes:
   enabled: true
   low_bands_count: 4
@@ -18,39 +18,33 @@ shapes:
   max_active: 25
   lifespan_s: 1.2
   drift_y: 0
-  # Set to 0 to only fade out without drifting
-  size_range: [0.2, 0.8]
-  shape_types: ["circle", "triangle", "square"]
-  colors: ["PURPLE"]
-  opacity_range: [0.9, 0.0]
-
-
-
-# Fractal background driven by chosen bands
-fractal:
-  enabled: true
-  only: true
-  bands_range: [18, 26]
-  resolution: [64, 36]
-  mode: "tiles"          # cheaper than image mode for real-time
-  tiles_max_cols: 64     # try 64x36 first; increase if smooth
-  tiles_max_rows: 36
-  tiles_compute_at_grid: true
-  accel: "numba"         # avoids Numba JIT startup delay
-  max_iter: 200           # start lower; raise slowly if you have headroom
-  iters_per_frame: 4
-  reuse_across_frames: true
-  param_reset_threshold: 0.04
-  update_fps: 30
-  alpha: 0.9
-  zoom_range: [0.9, 1.5]
-  julia_strength: 1.4
-  color_speed: 0.05
-  color_gamma: 0.9
-  color_scale: 1.6
-  color_offset: 0.3
-  interior_palette: true
-  palette: ["GREEN", "PURPLE", "RED", "YELLOW"]
-  overlay: true
-  extent_x: 0.8
-  extent_y: 1
+  size_range:
+  - 0.2
+  - 0.8
+  shape_types:
+  - circle
+  - triangle
+  - square
+  colors:
+  - PURPLE
+  opacity_range:
+  - 0.9
+  - 0.0
+live_fractal_intensity:
+  master: 1.0
+  exposure: 1.1929999589920044
+  glow_gain: 1.9179999828338623
+  trap_mix_gain: 1.7319999933242798
+  motion_gain: 0.12399999797344208
+  iteration_gain: 1.156999945640564
+  scale: 2.4779999256134033
+  iterations_base: 287.6289978027344
+  bailout_radius: 16.0
+  morph_gain: 0.0
+  ship_gain: 0.11299999803304672
+  trap_radius_scale: 1.8609999418258667
+  contrast: 1.4819999933242798
+  palette_id: 0
+  hue_offset: 0.19599999487400055
+  palette_saturation: 0.5210000276565552
+  fractal_type: 0
