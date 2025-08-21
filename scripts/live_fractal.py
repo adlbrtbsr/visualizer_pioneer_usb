@@ -330,8 +330,12 @@ def main():
 
                     // Map to vivid color using HSV (distinguished colors)
                     float t = mu / float(u_max_iter);
-                    // Palette A (default)
-                    float hueA = fract(0.92 * t + 0.15 * (atan(z.y, z.x) / 3.1415926));
+                    // Palette A (default) — remove angle branch-cut seam by avoiding atan
+                    // Use a continuous surrogate derived from normalized direction
+                    vec2 zn = z / max(length(z), 1e-6);
+                    float ang_mix = 0.5 * zn.x + 0.5 * zn.y; // bounded in [-1, 1]
+                    // Avoid hue wrapping entirely by clamping instead of fract
+                    float hueA = clamp(0.92 * t + 0.01 * ang_mix, 0.0, 1.0);
                     float satA = clamp(0.8 + 0.2 * u_high, 0.75, 1.0);
                     float valA = clamp(0.75 + 0.25 * u_mid, 0.70, 1.0);
                     vec3 colA = hsv2rgb(vec3(hueA, satA, valA));
