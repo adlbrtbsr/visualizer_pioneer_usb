@@ -89,20 +89,21 @@ class TkControlPanel:
                 add_slider(2, "Palette (0..3)", "palette_id", 0, 3, 1.0)
                 add_slider(3, "Hue Offset", "hue_offset", 0.0, 1.0, 0.01)
                 add_slider(4, "Palette Saturation", "palette_saturation", 0.0, 1.0, 0.01)
-                add_slider(5, "Motion Gain", "motion_gain", 0.0, 3.0, 0.01)
-                add_slider(6, "Iteration Gain", "iteration_gain", 0.5, 2.0, 0.01)
-                add_slider(7, "Trap Mix Gain", "trap_mix_gain", 0.0, 2.0, 0.01)
-                add_slider(8, "Glow Gain", "glow_gain", 0.0, 2.0, 0.01)
+                add_slider(5, "Fractal Type (0..4)", "fractal_type", 0, 4, 1.0)
+                add_slider(6, "Motion Gain", "motion_gain", 0.0, 3.0, 0.01)
+                add_slider(7, "Iteration Gain", "iteration_gain", 0.5, 2.0, 0.01)
+                add_slider(8, "Trap Mix Gain", "trap_mix_gain", 0.0, 2.0, 0.01)
+                add_slider(9, "Glow Gain", "glow_gain", 0.0, 2.0, 0.01)
                 # New customization sliders
-                add_slider(9, "Zoom (Scale)", "scale", 0.4, 4.0, 0.01)
-                add_slider(10, "Iterations Base", "iterations_base", 60.0, 300.0, 1.0)
-                add_slider(11, "Bailout Radius", "bailout_radius", 2.0, 16.0, 0.1)
-                add_slider(12, "Morph Gain", "morph_gain", 0.0, 2.0, 0.01)
-                add_slider(13, "Ship Gain", "ship_gain", 0.0, 2.0, 0.01)
-                add_slider(14, "Trap Radius Scale", "trap_radius_scale", 0.5, 2.0, 0.01)
+                add_slider(10, "Zoom (Scale)", "scale", 0.4, 4.0, 0.01)
+                add_slider(11, "Iterations Base", "iterations_base", 60.0, 300.0, 1.0)
+                add_slider(12, "Bailout Radius", "bailout_radius", 2.0, 16.0, 0.1)
+                add_slider(13, "Morph Gain", "morph_gain", 0.0, 2.0, 0.01)
+                add_slider(14, "Ship Gain", "ship_gain", 0.0, 2.0, 0.01)
+                add_slider(15, "Trap Radius Scale", "trap_radius_scale", 0.5, 2.0, 0.01)
 
                 btn_frame = tk.Frame(self._root)
-                btn_frame.grid(row=15, column=0, columnspan=2, pady=8)
+                btn_frame.grid(row=16, column=0, columnspan=2, pady=8)
                 def do_reset():
                     self.settings.master = 1.0
                     self.settings.exposure = 1.0
@@ -114,6 +115,7 @@ class TkControlPanel:
                     self.settings.palette_id = 0
                     self.settings.hue_offset = 0.0
                     self.settings.palette_saturation = 0.9
+                    self.settings.fractal_type = 0
                     self.settings.scale = 2.4
                     self.settings.iterations_base = 150.0
                     self.settings.bailout_radius = 8.0
@@ -122,7 +124,7 @@ class TkControlPanel:
                     self.settings.trap_radius_scale = 1.0
                     # Update scales visually
                     for k in [
-                        "master","exposure","contrast","palette_id","hue_offset","palette_saturation",
+                        "master","exposure","contrast","palette_id","hue_offset","palette_saturation","fractal_type",
                         "motion_gain","iteration_gain","trap_mix_gain","glow_gain",
                         "scale","iterations_base","bailout_radius","morph_gain","ship_gain","trap_radius_scale"
                     ]:
@@ -185,6 +187,7 @@ class VisualIntensitySettings:
     palette_id: int = 0
     hue_offset: float = 0.0
     palette_saturation: float = 0.9
+    fractal_type: int = 0  # 0 Hybrid, 1 Mandelbrot, 2 Julia, 3 Burning Ship, 4 Tricorn
 
     @classmethod
     def from_yaml(cls, path: Path):
@@ -213,6 +216,7 @@ class VisualIntensitySettings:
                         palette_id=int(node.get("palette_id", 0)),
                         hue_offset=float(node.get("hue_offset", 0.0)),
                         palette_saturation=float(node.get("palette_saturation", 0.9)),
+                        fractal_type=int(node.get("fractal_type", 0)),
                     )
         except Exception:
             pass
@@ -244,6 +248,7 @@ def _save_visual_intensity_yaml(settings: VisualIntensitySettings, path: Path) -
             "palette_id": int(settings.palette_id),
             "hue_offset": float(settings.hue_offset),
             "palette_saturation": float(settings.palette_saturation),
+            "fractal_type": int(settings.fractal_type),
         }
         data["live_fractal_intensity"] = block
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -528,6 +533,7 @@ def main():
                 uniform int   u_palette_id;  // 0: HSV, 1: Fire, 2: Ice, 3: Neon
                 uniform float u_hue_offset;  // 0..1 hue offset
                 uniform float u_palette_sat; // palette saturation bias
+                uniform int   u_fractal_type; // 0 Hybrid, 1 Mandelbrot, 2 Julia, 3 Burning Ship, 4 Tricorn
 
                 // High-contrast HSV palette
                 vec3 hsv2rgb(vec3 c) {
@@ -561,14 +567,47 @@ def main():
                     float cst = cos(u_trap_rot), snt = sin(u_trap_rot);
                     mat2 RT = mat2(cst, -snt, snt, cst);
                     for(i=0; i<u_max_iter && dot(z,z) <= (u_bail * u_bail); i++){
-                        // Burning Ship blend (abs before power)
-                        vec2 zb = mix(z, vec2(abs(z.x), abs(z.y)), clamp(u_ship, 0.0, 1.0));
-                        float r = length(zb);
-                        float theta = atan(zb.y, zb.x);
-                        float rp = pow(r, u_power);
-                        float ang = u_power * theta;
-                        vec2 zp = rp * vec2(cos(ang), sin(ang));
-                        z = zp + c_p;
+                        vec2 z_iter = z;
+                        if (u_fractal_type == 0) {
+                            // Hybrid with Burning Ship blend
+                            vec2 zb = mix(z, vec2(abs(z.x), abs(z.y)), clamp(u_ship, 0.0, 1.0));
+                            float r = length(zb);
+                            float theta = atan(zb.y, zb.x);
+                            float rp = pow(r, u_power);
+                            float ang = u_power * theta;
+                            z_iter = rp * vec2(cos(ang), sin(ang));
+                            z = z_iter + c_p;
+                        } else if (u_fractal_type == 1) {
+                            // Mandelbrot (power)
+                            float r = length(z);
+                            float theta = atan(z.y, z.x);
+                            float rp = pow(r, u_power);
+                            float ang = u_power * theta;
+                            z = rp * vec2(cos(ang), sin(ang)) + p;
+                        } else if (u_fractal_type == 2) {
+                            // Julia (power) with external c
+                            float r = length(z);
+                            float theta = atan(z.y, z.x);
+                            float rp = pow(r, u_power);
+                            float ang = u_power * theta;
+                            z = rp * vec2(cos(ang), sin(ang)) + u_c;
+                        } else if (u_fractal_type == 3) {
+                            // Burning Ship
+                            vec2 zb = vec2(abs(z.x), abs(z.y));
+                            float r = length(zb);
+                            float theta = atan(zb.y, zb.x);
+                            float rp = pow(r, u_power);
+                            float ang = u_power * theta;
+                            z = rp * vec2(cos(ang), sin(ang)) + p;
+                        } else {
+                            // Tricorn (conjugate before power) aka Mandelbar
+                            vec2 zc = vec2(z.x, -z.y);
+                            float r = length(zc);
+                            float theta = atan(zc.y, zc.x);
+                            float rp = pow(r, u_power);
+                            float ang = u_power * theta;
+                            z = rp * vec2(cos(ang), sin(ang)) + p;
+                        }
 
                         // Orbit-trap measurements (on unblended z for variety)
                         vec2 zt = RT * z;
@@ -769,6 +808,7 @@ def main():
                 vis_settings.palette_id = 0
                 vis_settings.hue_offset = 0.0
                 vis_settings.palette_saturation = 0.9
+                vis_settings.fractal_type = 0
                 vis_settings.scale = 2.4
                 vis_settings.iterations_base = 150.0
                 vis_settings.bailout_radius = 8.0
@@ -935,6 +975,8 @@ def main():
             set_uniform_if_present(prog, 'u_palette_id', int(getattr(vis_settings, 'palette_id', 0)))
             set_uniform_if_present(prog, 'u_hue_offset', float(getattr(vis_settings, 'hue_offset', 0.0)))
             set_uniform_if_present(prog, 'u_palette_sat', float(getattr(vis_settings, 'palette_saturation', 0.9)))
+            # Fractal type
+            set_uniform_if_present(prog, 'u_fractal_type', int(getattr(vis_settings, 'fractal_type', 0)))
             # Julia parameters (smoothed)
             set_uniform_if_present(prog, 'u_c', (float(c_param[0]), float(c_param[1])))
             target_power = float(np.clip(2.0 + 0.3 * (float(np.clip(high_s, 0.0, 1.0)) - 0.3), 1.8, 2.3))
@@ -980,6 +1022,7 @@ def main():
                         _c, vis_settings.palette_id = imgui.slider_int("Palette", int(vis_settings.palette_id), 0, 3); changed = changed or _c
                         _c, vis_settings.hue_offset = imgui.slider_float("Hue Offset", float(vis_settings.hue_offset), 0.0, 1.0); changed = changed or _c
                         _c, vis_settings.palette_saturation = imgui.slider_float("Palette Saturation", float(vis_settings.palette_saturation), 0.0, 1.0); changed = changed or _c
+                        _c, vis_settings.fractal_type = imgui.slider_int("Fractal Type", int(vis_settings.fractal_type), 0, 4); changed = changed or _c
                         _c, vis_settings.motion_gain = imgui.slider_float("Motion Gain", float(vis_settings.motion_gain), 0.0, 3.0); changed = changed or _c
                         _c, vis_settings.iteration_gain = imgui.slider_float("Iteration Gain", float(vis_settings.iteration_gain), 0.5, 2.0); changed = changed or _c
                         _c, vis_settings.trap_mix_gain = imgui.slider_float("Trap Mix Gain", float(vis_settings.trap_mix_gain), 0.0, 2.0); changed = changed or _c
@@ -1003,6 +1046,7 @@ def main():
                             vis_settings.palette_id = 0
                             vis_settings.hue_offset = 0.0
                             vis_settings.palette_saturation = 0.9
+                            vis_settings.fractal_type = 0
                             vis_settings.scale = 2.4
                             vis_settings.iterations_base = 150.0
                             vis_settings.bailout_radius = 8.0
