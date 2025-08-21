@@ -1,4 +1,5 @@
 import math
+import warnings
 import time
 import sys
 from pathlib import Path
@@ -21,6 +22,12 @@ try:
     import soundcard as sc
 except Exception:
     sc = None
+else:
+    # Suppress benign discontinuity warnings from Media Foundation backend
+    try:
+        warnings.filterwarnings("ignore", category=sc.SoundcardRuntimeWarning)
+    except Exception:
+        warnings.filterwarnings("ignore", message="data discontinuity in recording")
 
 # ---------------------- audio ----------------------
 SAMPLE_RATE = 48000
@@ -332,25 +339,13 @@ def main():
                     // Add very small jitter to mu to break iso-contour banding during zoom
                     float mu_jitter = (fract(sin(dot(gl_FragCoord.xy + vec2(mu), vec2(127.1, 311.7))) * 43758.5453) - 0.5) * 0.15;
                     mu += mu_jitter;
-                    // Map to vivid color using HSV (distinguished colors)
+                    // Map to color purely from low-frequency (bass) energy
                     float t = mu / float(u_max_iter);
-                    // Palette A (default) — remove angle branch-cut seam by avoiding atan
-                    // Use a continuous surrogate derived from normalized direction
-                    vec2 zn = z / max(length(z), 1e-6);
-                    float ang_mix = 0.5 * zn.x + 0.5 * zn.y; // bounded in [-1, 1]
-                    // Avoid hue wrapping entirely by clamping instead of fract
-                    float hueA = clamp(0.92 * t + 0.01 * ang_mix, 0.0, 1.0);
-                    float satA = clamp(0.8 + 0.2 * u_high, 0.75, 1.0);
-                    float valA = clamp(0.75 + 0.25 * u_mid, 0.70, 1.0);
-                    vec3 colA = hsv2rgb(vec3(hueA, satA, valA));
-                    // Palette B (alternative, more contrasting) — avoid discontinuous wrapping
-                    float hueB = 0.5 + 0.5 * sin(6.28318530718 * (0.25 + 0.6 * (1.0 - t) + 0.06 * sin(20.0 * t)));
-                    float satB = clamp(0.9 - 0.3 * u_high, 0.6, 1.0);
-                    float valB = clamp(0.8 + 0.2 * u_bass, 0.7, 1.0);
-                    vec3 colB = hsv2rgb(vec3(hueB, satB, valB));
-                    // Mid-driven palette mix
-                    float pal_mix = smoothstep(0.25, 0.85, clamp(u_mid, 0.0, 1.0));
-                    vec3 col = mix(colA, colB, pal_mix);
+                    float hue = fract(0.02 + 0.96 * clamp(u_bass, 0.0, 1.0));
+                    float sat = 0.9;
+                    // Keep structural contrast via iteration-based brightness only
+                    float val = mix(0.6, 1.0, clamp(t, 0.0, 1.0));
+                    vec3 col = hsv2rgb(vec3(hue, sat, val));
 
                     // Orbit-trap interior/exterior enhancement
                     float trap_c = exp(-8.0 * trap_min_circ);
@@ -390,7 +385,7 @@ def main():
     # Initial fractal params
     EDGE_CENTER = np.array([-0.745, 0.115], dtype=np.float32)
     center = EDGE_CENTER.copy()
-    scale = 3.0
+    scale = 2.4
     iter_base = 150
     t0 = time.time()
     bass_s, mid_s, high_s = 0.0, 0.0, 0.0  # smoothed bands
@@ -504,15 +499,8 @@ def main():
 
             # No time-based drift: all motion driven by audio only
 
-            # Gentle zoom around a baseline (reduced zooming overall)
-            scale_baseline = 2.4
-            if is_active:
-                scale_target = float(np.clip(scale_baseline - 0.12 * (float(bass_s) - 0.4), 2.3, 2.6))
-                scale = move_towards(float(scale), scale_target, max_delta=0.4 * dt)
-            else:
-                # Hard-lock to baseline when inactive (no movement)
-                scale = float(scale_baseline)
-            scale = float(np.clip(scale, 0.15, 3.0))
+            # Fixed zoom level (no audio-driven zoom)
+            scale = 2.4
 
             # Audio-driven Julia parameter c (smoothed, narrow range) and power (smoothed)
             # No baseline rotation: only audio drives omega
@@ -544,19 +532,14 @@ def main():
                 rot_param = lerp(rot_param, rot_target, min(2.5 * dt, 0.4))
             else:
                 rot_param = 0.0
-            prescale_target = float(np.clip(1.0 - 0.10 * (float(bass_s) - 0.4), 0.97, 1.03))
-            if not is_active:
-                prescale_target = 1.0
-            prescale_param = lerp(prescale_param, prescale_target, min(4.0 * dt, 0.6))
-            warp_target = 0.0 + 0.12 * float(np.clip(high_s - 0.3, 0.0, 1.0))
-            if is_active and (low_energy_accum <= 0.4):
-                warp_param = lerp(warp_param, warp_target, min(3.0 * dt, 0.5))
-            else:
-                warp_param = 0.0
+            # Disable pre-scale zoom
+            prescale_param = 1.0
+            # Disable outward quadratic warp to avoid radial stretching
+            warp_param = 0.0
 
             # Shear (from mids) to bend arms; swirl disabled; no drift
             swirl_target = 0.0
-            shear_target = 0.30 * float(np.clip(mid_s - 0.2, 0.0, 1.0))
+            shear_target = 0.10 * float(np.clip(mid_s - 0.2, 0.0, 1.0))
             if is_active:
                 shear_param = lerp(shear_param, shear_target, min(3.0 * dt, 0.5))
             else:
