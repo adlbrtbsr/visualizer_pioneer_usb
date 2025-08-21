@@ -8,3 +8,5 @@ soundcard>=0.4.2
 numba>=0.57.0
 moderngl>=5.9.0
 glfw>=2.6.5
+imgui>=2.0.0
+PyOpenGL>=3.1.7

@@ -7,6 +7,7 @@ import numpy as np
 import yaml
 from queue import Queue, Full, Empty
 import threading
+from dataclasses import dataclass
 
 # Ensure project root is on sys.path when running as a script
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -29,11 +30,171 @@ else:
     except Exception:
         warnings.filterwarnings("ignore", message="data discontinuity in recording")
 
+# Optional GUI overlay (pyimgui)
+try:
+    import imgui
+    from imgui.integrations.glfw import GlfwRenderer
+except Exception:
+    imgui = None
+    GlfwRenderer = None
+
+# Optional Tkinter fallback control panel (pure Python)
+try:
+    import tkinter as tk
+except Exception:
+    tk = None
+
+class TkControlPanel:
+    def __init__(self, settings: "VisualIntensitySettings", save_fn) -> None:
+        self.settings = settings
+        self.save_fn = save_fn
+        self._thread = None
+        self._root = None
+        self._vars = {}
+        self._running = False
+
+    def start(self) -> None:
+        if tk is None:
+            return
+        if self._thread is not None:
+            return
+        self._running = True
+        def _run():
+            try:
+                self._root = tk.Tk()
+                self._root.title("Fractal Controls")
+                self._root.geometry("360x280")
+                self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+                def add_slider(row, label, key, from_, to_, resolution=0.01):
+                    tk.Label(self._root, text=label).grid(row=row, column=0, sticky="w", padx=6, pady=4)
+                    var = tk.DoubleVar(value=float(getattr(self.settings, key)))
+                    self._vars[key] = var
+                    def on_change(val=None, k=key, v=var):
+                        try:
+                            setattr(self.settings, k, float(v.get()))
+                        except Exception:
+                            pass
+                    scale = tk.Scale(self._root, from_=from_, to=to_, resolution=resolution, orient=tk.HORIZONTAL,
+                                     showvalue=True, length=220, command=lambda _=None: on_change())
+                    scale.set(float(getattr(self.settings, key)))
+                    scale.grid(row=row, column=1, sticky="ew", padx=6)
+                    # Tie var so external changes reflect visually on next redraw
+                    self._vars[key + "_scale"] = scale
+
+                add_slider(0, "Master", "master", 0.0, 2.0, 0.01)
+                add_slider(1, "Exposure", "exposure", 0.6, 1.6, 0.01)
+                add_slider(2, "Motion Gain", "motion_gain", 0.0, 3.0, 0.01)
+                add_slider(3, "Iteration Gain", "iteration_gain", 0.5, 2.0, 0.01)
+                add_slider(4, "Trap Mix Gain", "trap_mix_gain", 0.0, 2.0, 0.01)
+                add_slider(5, "Glow Gain", "glow_gain", 0.0, 2.0, 0.01)
+
+                btn_frame = tk.Frame(self._root)
+                btn_frame.grid(row=6, column=0, columnspan=2, pady=8)
+                def do_reset():
+                    self.settings.master = 1.0
+                    self.settings.exposure = 1.0
+                    self.settings.motion_gain = 1.0
+                    self.settings.iteration_gain = 1.0
+                    self.settings.trap_mix_gain = 1.0
+                    self.settings.glow_gain = 1.0
+                    # Update scales visually
+                    for k in ["master","exposure","motion_gain","iteration_gain","trap_mix_gain","glow_gain"]:
+                        try:
+                            self._vars[k+"_scale"].set(float(getattr(self.settings, k)))
+                        except Exception:
+                            pass
+                def do_save():
+                    try:
+                        self.save_fn(self.settings, PROJECT_ROOT / "configs" / "visuals.yaml")
+                    except Exception:
+                        pass
+                tk.Button(btn_frame, text="Reset", command=do_reset).pack(side=tk.LEFT, padx=6)
+                tk.Button(btn_frame, text="Save", command=do_save).pack(side=tk.LEFT, padx=6)
+
+                self._root.mainloop()
+            finally:
+                self._running = False
+                self._root = None
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def _on_close(self):
+        try:
+            if self._root is not None:
+                self._root.destroy()
+        except Exception:
+            pass
+        self._running = False
+
+    def close(self) -> None:
+        try:
+            if self._root is not None:
+                self._root.after(0, self._root.destroy)
+        except Exception:
+            pass
+
 # ---------------------- audio ----------------------
 SAMPLE_RATE = 48000
 BLOCK = 512             # smaller -> lower latency, higher CPU
 NFFT = 1024             # zero-pad above BLOCK for cleaner bands
 
+
+@dataclass
+class VisualIntensitySettings:
+    master: float = 1.0
+    exposure: float = 1.0
+    glow_gain: float = 1.0
+    trap_mix_gain: float = 1.0
+    motion_gain: float = 1.0
+    iteration_gain: float = 1.0
+
+    @classmethod
+    def from_yaml(cls, path: Path):
+        try:
+            if path.is_file():
+                with path.open("r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                node = {}
+                if isinstance(data, dict):
+                    node = data.get("live_fractal_intensity") or data.get("intensity") or {}
+                if isinstance(node, dict):
+                    return cls(
+                        master=float(node.get("master", 1.0)),
+                        exposure=float(node.get("exposure", 1.0)),
+                        glow_gain=float(node.get("glow_gain", 1.0)),
+                        trap_mix_gain=float(node.get("trap_mix_gain", 1.0)),
+                        motion_gain=float(node.get("motion_gain", 1.0)),
+                        iteration_gain=float(node.get("iteration_gain", 1.0)),
+                    )
+        except Exception:
+            pass
+        return cls()
+
+
+def _save_visual_intensity_yaml(settings: VisualIntensitySettings, path: Path) -> None:
+    try:
+        data = {}
+        if path.is_file():
+            with path.open("r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+                if isinstance(loaded, dict):
+                    data = loaded
+        block = {
+            "master": float(settings.master),
+            "exposure": float(settings.exposure),
+            "glow_gain": float(settings.glow_gain),
+            "trap_mix_gain": float(settings.trap_mix_gain),
+            "motion_gain": float(settings.motion_gain),
+            "iteration_gain": float(settings.iteration_gain),
+        }
+        data["live_fractal_intensity"] = block
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False)
+    except Exception:
+        # Swallow errors silently during live UI; user can still adjust in-app
+        pass
 
 def main():
     # Load audio capture configuration similar to probe_audio
@@ -229,6 +390,32 @@ def main():
 
     ctx = moderngl.create_context()
 
+    # Initialize GUI if available
+    imgui_impl = None
+    ui_visible = True
+    tk_panel = None
+    if imgui is not None and GlfwRenderer is not None:
+        try:
+            imgui.create_context()
+            imgui_impl = GlfwRenderer(window)
+            io = imgui.get_io()
+            io.display_size = (W, H)
+            print("[UI] ImGui overlay enabled. Press F1 to toggle.")
+        except Exception:
+            imgui_impl = None
+            print("[UI] ImGui overlay not available (init failed).")
+    if imgui_impl is None and tk is not None:
+        try:
+            tk_panel = TkControlPanel(vis_settings, _save_visual_intensity_yaml)
+            tk_panel.start()
+            print("[UI] Tkinter control panel launched in a separate window.")
+        except Exception:
+            tk_panel = None
+            print("[UI] Tkinter control panel failed to launch.")
+
+    # Keyboard-only controls (always available). Print quick help once.
+    print("[UI] Keyboard controls: [ ] Master, -/= Exposure, ,/. Motion, ;/' Iterations, N/M TrapMix, J/K Glow, R Reset, Ctrl+S Save")
+
     # Fullscreen quad
     quad = ctx.buffer(np.array([
         -1, -1,  0, 0,
@@ -392,6 +579,9 @@ def main():
     band_normalizer = Normalizer(mode="percentile", window=90, decay=0.02)
     band_smoother = Smoother(attack=0.6, release=0.3)
 
+    # Visual intensity settings (optional YAML override)
+    vis_settings = VisualIntensitySettings.from_yaml(PROJECT_ROOT / "configs" / "visuals.yaml")
+
     # Audio responsiveness helpers
     agc_level = 1.0  # automatic gain control running level (EMA of 90th percentile)
     prev_spec = np.zeros(NFFT//2 + 1, dtype=np.float32)
@@ -426,6 +616,10 @@ def main():
     # Visual drift params (continuous, subtle motion)
     swirl_param = 0.0
     shear_param = 0.0
+    # Input edge tracking for hotkeys
+    prev_f1 = glfw.RELEASE
+    prev_save_combo = False
+
     try:
         while not glfw.window_should_close(window):
             glfw.poll_events()
@@ -433,6 +627,77 @@ def main():
             fb_w, fb_h = glfw.get_framebuffer_size(window)
             if fb_w > 0 and fb_h > 0:
                 set_uniform_if_present(prog, 'u_res', (fb_w, fb_h))
+                if imgui_impl is not None:
+                    io = imgui.get_io()
+                    io.display_size = (fb_w, fb_h)
+
+            # Hotkeys: F1 toggle UI, Ctrl+S save
+            f1_state = glfw.get_key(window, glfw.KEY_F1)
+            if f1_state == glfw.PRESS and prev_f1 != glfw.PRESS:
+                if imgui_impl is not None:
+                    ui_visible = not ui_visible
+                    print(f"[UI] ImGui overlay {'shown' if ui_visible else 'hidden'}.")
+                else:
+                    print("[UI] ImGui overlay not available; a separate Tk control window is used.")
+            prev_f1 = f1_state
+
+            ctrl_down = (glfw.get_key(window, glfw.KEY_LEFT_CONTROL) == glfw.PRESS) or (glfw.get_key(window, glfw.KEY_RIGHT_CONTROL) == glfw.PRESS)
+            s_down = glfw.get_key(window, glfw.KEY_S) == glfw.PRESS
+            save_combo = bool(ctrl_down and s_down)
+            if save_combo and not prev_save_combo:
+                # Will save after rendering logic to avoid stutter
+                pending_save = True
+            else:
+                pending_save = False
+            prev_save_combo = save_combo
+
+            # Keyboard sliders (continuous while pressed)
+            def _clamp(x, lo, hi):
+                return float(min(max(float(x), float(lo)), float(hi)))
+            def _adjust(name, delta, lo, hi):
+                try:
+                    v = float(getattr(vis_settings, name))
+                    v = _clamp(v + float(delta), lo, hi)
+                    setattr(vis_settings, name, v)
+                except Exception:
+                    pass
+
+            if glfw.get_key(window, glfw.KEY_LEFT_BRACKET) == glfw.PRESS:
+                _adjust('master', -0.02, 0.0, 2.0)
+            if glfw.get_key(window, glfw.KEY_RIGHT_BRACKET) == glfw.PRESS:
+                _adjust('master',  0.02, 0.0, 2.0)
+            if glfw.get_key(window, glfw.KEY_MINUS) == glfw.PRESS:
+                _adjust('exposure', -0.01, 0.6, 1.6)
+            if glfw.get_key(window, glfw.KEY_EQUAL) == glfw.PRESS:
+                _adjust('exposure',  0.01, 0.6, 1.6)
+            if glfw.get_key(window, glfw.KEY_COMMA) == glfw.PRESS:
+                _adjust('motion_gain', -0.02, 0.0, 3.0)
+            if glfw.get_key(window, glfw.KEY_PERIOD) == glfw.PRESS:
+                _adjust('motion_gain',  0.02, 0.0, 3.0)
+            if glfw.get_key(window, glfw.KEY_SEMICOLON) == glfw.PRESS:
+                _adjust('iteration_gain', -0.02, 0.5, 2.0)
+            if glfw.get_key(window, glfw.KEY_APOSTROPHE) == glfw.PRESS:
+                _adjust('iteration_gain',  0.02, 0.5, 2.0)
+            if glfw.get_key(window, glfw.KEY_N) == glfw.PRESS:
+                _adjust('trap_mix_gain', -0.02, 0.0, 2.0)
+            if glfw.get_key(window, glfw.KEY_M) == glfw.PRESS:
+                _adjust('trap_mix_gain',  0.02, 0.0, 2.0)
+            if glfw.get_key(window, glfw.KEY_J) == glfw.PRESS:
+                _adjust('glow_gain', -0.02, 0.0, 2.0)
+            if glfw.get_key(window, glfw.KEY_K) == glfw.PRESS:
+                _adjust('glow_gain',  0.02, 0.0, 2.0)
+
+            # Reset defaults on R key edge
+            r_state = glfw.get_key(window, glfw.KEY_R)
+            if r_state == glfw.PRESS and (globals().setdefault('_prev_r_key', glfw.RELEASE) != glfw.PRESS):
+                vis_settings.master = 1.0
+                vis_settings.exposure = 1.0
+                vis_settings.motion_gain = 1.0
+                vis_settings.iteration_gain = 1.0
+                vis_settings.trap_mix_gain = 1.0
+                vis_settings.glow_gain = 1.0
+                print("[UI] Settings reset to defaults.")
+            globals()['_prev_r_key'] = r_state
 
             # Read and analyze audio using project analysis utilities
             last_block = None
@@ -505,6 +770,8 @@ def main():
             # Audio-driven Julia parameter c (smoothed, narrow range) and power (smoothed)
             # No baseline rotation: only audio drives omega
             target_omega = (0.13 * float(np.clip(mid_s, 0.0, 1.0)) if is_active else 0.0)
+            # Apply motion gain and master intensity
+            target_omega *= float(vis_settings.motion_gain) * float(vis_settings.master)
             if is_active:
                 omega = lerp(omega, target_omega, min(1.5 * dt, 0.25))
                 angle_accum += omega * dt
@@ -528,6 +795,7 @@ def main():
 
             # Audio-driven pre-transform parameters
             rot_target = 0.0 + 1.0 * float(np.clip(mid_s - 0.25, 0.0, 1.0))
+            rot_target *= float(vis_settings.motion_gain) * float(vis_settings.master)
             if is_active:
                 rot_param = lerp(rot_param, rot_target, min(2.5 * dt, 0.4))
             else:
@@ -540,6 +808,7 @@ def main():
             # Shear (from mids) to bend arms; swirl disabled; no drift
             swirl_target = 0.0
             shear_target = 0.10 * float(np.clip(mid_s - 0.2, 0.0, 1.0))
+            shear_target *= float(vis_settings.motion_gain) * float(vis_settings.master)
             if is_active:
                 shear_param = lerp(shear_param, shear_target, min(3.0 * dt, 0.5))
             else:
@@ -557,6 +826,8 @@ def main():
 
             # Iterations based only on energy (reverted for performance)
             u_iters = int(iter_base + 120 * np.clip(energy, 0.0, 1.5))
+            # Apply iteration gain and master, then clamp to safe range
+            u_iters = int(u_iters * float(vis_settings.iteration_gain) * float(vis_settings.master))
             u_iters = int(np.clip(u_iters, 100, 360))
 
             # Upload uniforms (guarded in case of optimization removing unused uniforms)
@@ -564,10 +835,14 @@ def main():
             set_uniform_if_present(prog, 'u_center', tuple(center.tolist()))
             set_uniform_if_present(prog, 'u_scale', float(scale))
             set_uniform_if_present(prog, 'u_max_iter', int(u_iters))
-            set_uniform_if_present(prog, 'u_bass', float(bass_s))
+            # Glow gain approximated by scaling bass energy
+            bass_scaled = float(bass_s) * float(vis_settings.glow_gain) * float(vis_settings.master)
+            set_uniform_if_present(prog, 'u_bass', float(bass_scaled))
             set_uniform_if_present(prog, 'u_mid', float(mid_s))
             set_uniform_if_present(prog, 'u_high', float(high_s))
-            set_uniform_if_present(prog, 'u_energy', float(np.clip(energy, 0.0, 1.5)))
+            # Exposure approximation via energy scaling
+            energy_scaled = float(np.clip(energy * float(vis_settings.exposure) * float(vis_settings.master), 0.0, 1.5))
+            set_uniform_if_present(prog, 'u_energy', energy_scaled)
             set_uniform_if_present(prog, 'u_view_uv_center', (0.5, 0.5))
             # Bailout radius adjusted for larger visual window
             set_uniform_if_present(prog, 'u_bail', float(8.0))
@@ -591,6 +866,8 @@ def main():
             trap_rot = float((0.5 * angle_accum) + 1.2 * float(np.clip(high_s - 0.3, 0.0, 1.0)))
             if not is_active:
                 trap_mix *= 0.4
+            # Apply trap mix gain and master, clamp to 0..1
+            trap_mix = float(np.clip(trap_mix * float(vis_settings.trap_mix_gain) * float(vis_settings.master), 0.0, 1.0))
             set_uniform_if_present(prog, 'u_trap_r', trap_r)
             set_uniform_if_present(prog, 'u_trap_mix', trap_mix)
             set_uniform_if_present(prog, 'u_trap_rot', trap_rot)
@@ -598,11 +875,54 @@ def main():
             # Draw
             ctx.clear(0.0, 0.0, 0.0, 1.0)
             vao.render(moderngl.TRIANGLE_STRIP)
+
+            # Draw GUI overlay last
+            if imgui_impl is not None and ui_visible:
+                try:
+                    imgui_impl.process_inputs()
+                    imgui.new_frame()
+                    if imgui.begin("Visual Intensity", True, flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE)[0]:
+                        changed = False
+                        _c, vis_settings.master = imgui.slider_float("Master", float(vis_settings.master), 0.0, 2.0); changed = changed or _c
+                        _c, vis_settings.exposure = imgui.slider_float("Exposure", float(vis_settings.exposure), 0.6, 1.6); changed = changed or _c
+                        _c, vis_settings.motion_gain = imgui.slider_float("Motion Gain", float(vis_settings.motion_gain), 0.0, 3.0); changed = changed or _c
+                        _c, vis_settings.iteration_gain = imgui.slider_float("Iteration Gain", float(vis_settings.iteration_gain), 0.5, 2.0); changed = changed or _c
+                        _c, vis_settings.trap_mix_gain = imgui.slider_float("Trap Mix Gain", float(vis_settings.trap_mix_gain), 0.0, 2.0); changed = changed or _c
+                        _c, vis_settings.glow_gain = imgui.slider_float("Glow Gain", float(vis_settings.glow_gain), 0.0, 2.0); changed = changed or _c
+
+                        if imgui.button("Reset"):
+                            vis_settings.master = 1.0
+                            vis_settings.exposure = 1.0
+                            vis_settings.motion_gain = 1.0
+                            vis_settings.iteration_gain = 1.0
+                            vis_settings.trap_mix_gain = 1.0
+                            vis_settings.glow_gain = 1.0
+                        imgui.same_line()
+                        if imgui.button("Save (Ctrl+S)") or pending_save:
+                            try:
+                                _save_visual_intensity_yaml(vis_settings, PROJECT_ROOT / "configs" / "visuals.yaml")
+                            except Exception:
+                                pass
+                    imgui.end()
+                    imgui.render()
+                    imgui_impl.render(imgui.get_draw_data())
+                except Exception:
+                    pass
             glfw.swap_buffers(window)
     finally:
         # Cleanup
         try:
             cap.stop()
+        except Exception:
+            pass
+        try:
+            if imgui_impl is not None:
+                imgui_impl.shutdown()
+        except Exception:
+            pass
+        try:
+            if tk_panel is not None:
+                tk_panel.close()
         except Exception:
             pass
         glfw.terminate()
