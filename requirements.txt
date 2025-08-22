@@ -1,12 +1,7 @@
 numpy>=1.24,<2.0
-scipy>=1.10
 sounddevice>=0.4.6
 PyYAML>=6.0
-manim[opengl]>=0.18.1
-pyinstaller>=6.0
 soundcard>=0.4.2
-numba>=0.57.0
 moderngl>=5.9.0
 glfw>=2.6.5
 imgui>=2.0.0
-PyOpenGL>=3.1.7
