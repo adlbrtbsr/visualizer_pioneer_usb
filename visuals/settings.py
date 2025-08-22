@@ -23,6 +23,11 @@ class VisualIntensitySettings:
     hue_offset: float = 0.0
     palette_saturation: float = 0.9
     fractal_type: int = 0
+    bend_gain: float = 1.0
+    # View controls
+    view_angle_deg: float = 0.0
+    view_center_x: float = 0.5
+    view_center_y: float = 0.5
 
     @classmethod
     def from_yaml(cls, path: Path):
@@ -52,6 +57,10 @@ class VisualIntensitySettings:
                         hue_offset=float(node.get("hue_offset", 0.0)),
                         palette_saturation=float(node.get("palette_saturation", 0.9)),
                         fractal_type=int(node.get("fractal_type", 0)),
+                        bend_gain=float(node.get("bend_gain", 1.0)),
+                        view_angle_deg=float(node.get("view_angle_deg", 0.0)),
+                        view_center_x=float(node.get("view_center_x", 0.5)),
+                        view_center_y=float(node.get("view_center_y", 0.5)),
                     )
         except Exception:
             pass
@@ -84,6 +93,10 @@ def save_visual_intensity_yaml(settings: VisualIntensitySettings, path: Path) ->
             "hue_offset": float(settings.hue_offset),
             "palette_saturation": float(settings.palette_saturation),
             "fractal_type": int(settings.fractal_type),
+            "bend_gain": float(settings.bend_gain),
+            "view_angle_deg": float(settings.view_angle_deg),
+            "view_center_x": float(settings.view_center_x),
+            "view_center_y": float(settings.view_center_y),
         }
         data["live_fractal_intensity"] = block
         path.parent.mkdir(parents=True, exist_ok=True)
