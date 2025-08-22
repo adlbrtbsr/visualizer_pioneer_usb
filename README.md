@@ -68,7 +68,7 @@ Processing pipeline (in `scripts/live_fractal.py` and `audio/analysis.py`):
 - A Hann window and rFFT produce a magnitude spectrum (`n_fft=1024`).
 - Magnitudes are aggregated into log‑spaced bands. The visualizer uses 3 bands: bass / mid / high.
 - Values are normalized (percentile window) and smoothed (attack/release EMA).
-- The final 3 values drive fractal parameters (iterations, hue, trap mix, rotation, motion, etc.).
+- The final 3 values drive fractal parameters (iterations, hue, trap mix, rotation, motion, bend/warp, etc.).
 
 Controls at runtime:
 - F1: Toggle ImGui overlay (if available).
@@ -128,6 +128,9 @@ Holds rendering and UI‑tuned intensity parameters. The visualizer reads the `l
 - `scale`, `iterations_base`, `bailout_radius`: Fractal shape/depth controls.
 - `palette_id`, `hue_offset`, `palette_saturation`: Color controls.
 - `fractal_type`: Switch among shader fractal variants.
+ - `bend_gain`: Scales audio‑reactive bend/warp driven by overall energy (smoothed).
+ - `view_angle_deg`: Static view rotation in degrees (added to audio‑driven rotation).
+ - `view_center_x`, `view_center_y`: View UV center position (normalized 0..1).
 
 Other keys in this file (e.g., `renderer`, `fps`, `shapes`, `color_scheme`) are for broader visualization contexts and may not be consumed by the fractal script.
 
