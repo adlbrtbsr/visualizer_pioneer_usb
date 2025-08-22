@@ -69,6 +69,10 @@ class ImGuiOverlay:
                 _c, settings.morph_gain = imgui.slider_float("Morph Gain", float(settings.morph_gain), 0.0, 2.0); changed = changed or _c
                 _c, settings.ship_gain = imgui.slider_float("Ship Gain", float(settings.ship_gain), 0.0, 2.0); changed = changed or _c
                 _c, settings.trap_radius_scale = imgui.slider_float("Trap Radius Scale", float(settings.trap_radius_scale), 0.5, 2.0); changed = changed or _c
+                _c, settings.bend_gain = imgui.slider_float("Bend Gain", float(settings.bend_gain), 0.0, 3.0); changed = changed or _c
+                _c, settings.view_angle_deg = imgui.slider_float("View Angle (deg)", float(settings.view_angle_deg), -180.0, 180.0); changed = changed or _c
+                _c, settings.view_center_x = imgui.slider_float("View Center X", float(settings.view_center_x), 0.0, 1.0); changed = changed or _c
+                _c, settings.view_center_y = imgui.slider_float("View Center Y", float(settings.view_center_y), 0.0, 1.0); changed = changed or _c
 
                 if imgui.button("Reset"):
                     settings.master = 1.0
@@ -88,6 +92,10 @@ class ImGuiOverlay:
                     settings.morph_gain = 1.0
                     settings.ship_gain = 1.0
                     settings.trap_radius_scale = 1.0
+                    settings.bend_gain = 1.0
+                    settings.view_angle_deg = 0.0
+                    settings.view_center_x = 0.5
+                    settings.view_center_y = 0.5
                 imgui.same_line()
                 if imgui.button("Save (Ctrl+S)") or pending_save:
                     try:

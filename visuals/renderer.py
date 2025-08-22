@@ -31,6 +31,7 @@ class FractalState:
     ship_param: float = 0.0
     swirl_param: float = 0.0
     shear_param: float = 0.0
+    bend_param: float = 0.0
     is_active: bool = False
     low_energy_accum: float = 0.0
     silence_accum: float = 0.0
@@ -122,7 +123,11 @@ class FractalRenderer:
         else:
             s.rot_param = 0.0
         s.prescale_param = 1.0
-        s.warp_param = 0.0
+        # Map overall energy to bend/warp; smooth for stability
+        bend_target = float(np.clip((energy - 0.15) * 1.8, 0.0, 1.0))
+        bend_target *= float(getattr(settings, 'bend_gain', 1.0)) * float(getattr(settings, 'master', 1.0))
+        s.bend_param = self._lerp(s.bend_param, bend_target, min(2.0 * dt, 0.35))
+        s.warp_param = float(np.clip(s.bend_param * 0.65, 0.0, 1.0))
 
         shear_target = 0.10 * float(np.clip(s.mid_s - 0.2, 0.0, 1.0))
         shear_target *= float(settings.motion_gain) * float(settings.master)
@@ -163,7 +168,9 @@ class FractalRenderer:
         self._set_uniform(prog, 'u_high', float(s.high_s))
         energy = float(np.clip(((s.bass_s + s.mid_s + s.high_s) / 3.0) * float(settings.exposure) * float(settings.master), 0.0, 1.5))
         self._set_uniform(prog, 'u_energy', energy)
-        self._set_uniform(prog, 'u_view_uv_center', (0.5, 0.5))
+        cx = float(np.clip(getattr(settings, 'view_center_x', 0.5), 0.0, 1.0))
+        cy = float(np.clip(getattr(settings, 'view_center_y', 0.5), 0.0, 1.0))
+        self._set_uniform(prog, 'u_view_uv_center', (cx, cy))
         self._set_uniform(prog, 'u_bail', float(getattr(settings, 'bailout_radius', 8.0)))
         self._set_uniform(prog, 'u_contrast', float(getattr(settings, 'contrast', 1.0)))
         self._set_uniform(prog, 'u_palette_id', int(getattr(settings, 'palette_id', 0)))
@@ -174,9 +181,12 @@ class FractalRenderer:
         target_power = float(np.clip(2.0 + 0.3 * (float(np.clip(s.high_s, 0.0, 1.0)) - 0.3), 1.8, 2.3))
         s.power_param = self._lerp(s.power_param, target_power, 0.3)
         self._set_uniform(prog, 'u_power', float(s.power_param))
-        self._set_uniform(prog, 'u_rot', float(s.rot_param))
+        rot_user = float(np.deg2rad(float(getattr(settings, 'view_angle_deg', 0.0))))
+        self._set_uniform(prog, 'u_rot', float(s.rot_param + rot_user))
         self._set_uniform(prog, 'u_pre_scale', float(s.prescale_param))
         self._set_uniform(prog, 'u_warp', float(s.warp_param))
+        # Provide direct bend uniform if future shader wants separate control
+        self._set_uniform(prog, 'u_bend', float(s.bend_param))
         self._set_uniform(prog, 'u_morph', float(s.morph_param))
         self._set_uniform(prog, 'u_ship', float(s.ship_param))
         self._set_uniform(prog, 'u_swirl', float(s.swirl_param))
@@ -237,6 +247,7 @@ class FractalRenderer:
             uniform float u_rot;
             uniform float u_pre_scale;
             uniform float u_warp;
+            uniform float u_bend;
             uniform float u_energy;
             uniform float u_morph;
             uniform float u_ship;
@@ -265,9 +276,10 @@ class FractalRenderer:
                 float cs = cos(u_rot), sn = sin(u_rot);
                 mat2 R = mat2(cs, -sn, sn, cs);
                 mat2 Sh = mat2(1.0, u_shear, u_shear, 1.0);
+                // Bend is expressed via warp quadratic term and shear mixing
                 vec2 p = R * (Sh * (p0 * u_pre_scale));
                 vec2 p2 = vec2(p.x*p.x - p.y*p.y, 2.0*p.x*p.y);
-                p += u_warp * p2;
+                p += (u_warp + 0.4 * u_bend) * p2;
                 p += u_center;
 
                 vec2 c_p = mix(p, u_c, clamp(u_morph, 0.0, 1.0));

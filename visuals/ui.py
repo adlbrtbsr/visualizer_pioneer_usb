@@ -74,9 +74,13 @@ class TkControlPanel:
                 add_slider(13, "Morph Gain", "morph_gain", 0.0, 2.0, 0.01)
                 add_slider(14, "Ship Gain", "ship_gain", 0.0, 2.0, 0.01)
                 add_slider(15, "Trap Radius Scale", "trap_radius_scale", 0.5, 2.0, 0.01)
+                add_slider(16, "Bend Gain", "bend_gain", 0.0, 3.0, 0.01)
+                add_slider(17, "View Angle (deg)", "view_angle_deg", -180.0, 180.0, 0.5)
+                add_slider(18, "View Center X", "view_center_x", 0.0, 1.0, 0.005)
+                add_slider(19, "View Center Y", "view_center_y", 0.0, 1.0, 0.005)
 
                 btn_frame = tk.Frame(self._root)
-                btn_frame.grid(row=16, column=0, columnspan=2, pady=8)
+                btn_frame.grid(row=20, column=0, columnspan=2, pady=8)
 
                 def do_reset():
                     self.settings.master = 1.0
@@ -96,6 +100,10 @@ class TkControlPanel:
                     self.settings.morph_gain = 1.0
                     self.settings.ship_gain = 1.0
                     self.settings.trap_radius_scale = 1.0
+                    self.settings.bend_gain = 1.0
+                    self.settings.view_angle_deg = 0.0
+                    self.settings.view_center_x = 0.5
+                    self.settings.view_center_y = 0.5
                     for k in [
                         "master",
                         "exposure",
@@ -114,6 +122,10 @@ class TkControlPanel:
                         "morph_gain",
                         "ship_gain",
                         "trap_radius_scale",
+                        "bend_gain",
+                        "view_angle_deg",
+                        "view_center_x",
+                        "view_center_y",
                     ]:
                         try:
                             self._vars[k + "_scale"].set(float(getattr(self.settings, k)))
