@@ -164,7 +164,7 @@ python scripts\probe_audio.py --loopback --device "Realtek" --sample-rate 48000 
 
 If WASAPI fails, the tool can fall back to `soundcard` loopback and try common samplerates.
 
-### 2) Run the live fractal visualizer
+### 2) Run the live fractal visualizer (source)
 
 ```powershell
 python scripts\live_fractal.py
@@ -213,5 +213,48 @@ Tips:
 ## License
 
 MIT. Contributions welcome.
+
+
+---
+
+## Packaging & Releases
+
+### Local build (Windows, PyInstaller)
+
+From an activated venv in the project root:
+
+```powershell
+pip install -r requirements.txt pyinstaller
+
+# Create a standalone exe with configs bundled
+pyinstaller --noconfirm --clean ^
+  --name "VisualizerPioneerUSB" ^
+  --onefile ^
+  --add-data "configs\\audio.yaml;configs" ^
+  --add-data "configs\\analysis.yaml;configs" ^
+  --add-data "configs\\mapping.yaml;configs" ^
+  --add-data "configs\\visuals.yaml;configs" ^
+  scripts\\live_fractal.py
+
+# Output exe: dist\\VisualizerPioneerUSB.exe
+```
+
+Notes:
+- The executable resolves resources relative to its own directory when frozen.
+- If `imgui` wheels are missing for your Python version, install VS Build Tools (see above) before building.
+
+### GitHub Releases (CI)
+
+This repo can publish a Windows build on tag push. Workflow at `.github/workflows/release.yml` builds with PyInstaller and uploads `VisualizerPioneerUSB.zip` as a release asset.
+
+To release:
+
+```powershell
+# Update version in your tag (semantic versioning)
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+After CI finishes, download `VisualizerPioneerUSB.zip` from the GitHub Release page, extract, and run `VisualizerPioneerUSB.exe`. Edit YAMLs in the adjacent `configs` folder or tweak settings in the UI and press Ctrl+S to save.
 
 

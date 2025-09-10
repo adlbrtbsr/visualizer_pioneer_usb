@@ -14,11 +14,15 @@ try:
 except Exception:
 	sc = None
 
-# Ensure project root is importable when running this script directly
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _SCRIPT_DIR.parent
-if str(_PROJECT_ROOT) not in sys.path:
-	sys.path.insert(0, str(_PROJECT_ROOT))
+# Resolve project root for both source and frozen executables
+IS_FROZEN = bool(getattr(sys, 'frozen', False))
+if IS_FROZEN:
+	_PROJECT_ROOT = Path(sys.executable).resolve().parent
+else:
+	_SCRIPT_DIR = Path(__file__).resolve().parent
+	_PROJECT_ROOT = _SCRIPT_DIR.parent
+	if str(_PROJECT_ROOT) not in sys.path:
+		sys.path.insert(0, str(_PROJECT_ROOT))
 
 from audio import AudioCapture, AudioConfig, list_devices
 
@@ -261,6 +265,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
 	args = build_parser().parse_args(argv)
 	config_path = Path(args.config)
+	if not config_path.is_absolute():
+		config_path = (_PROJECT_ROOT / config_path).resolve()
 	defaults = load_defaults(config_path)
 	# Host API for listing
 	host_api = args.host_api or defaults.get("host_api_name", "Windows WASAPI")

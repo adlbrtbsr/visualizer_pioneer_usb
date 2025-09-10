@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean `
+            --name "VisualizerPioneerUSB" `
+            --onefile `
+            --add-data "configs\\audio.yaml;configs" `
+            --add-data "configs\\analysis.yaml;configs" `
+            --add-data "configs\\mapping.yaml;configs" `
+            --add-data "configs\\visuals.yaml;configs" `
+            scripts\\live_fractal.py
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          mkdir artifact
+          Copy-Item dist/VisualizerPioneerUSB.exe artifact/
+          Copy-Item configs -Recurse artifact/configs
+          Compress-Archive -Path artifact/* -DestinationPath VisualizerPioneerUSB.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: VisualizerPioneerUSB.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+

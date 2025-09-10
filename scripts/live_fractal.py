@@ -7,10 +7,16 @@ import yaml
 import glfw
 import moderngl
 
-# Ensure project root is on sys.path when running as a script
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+# Resolve project root for both source and frozen executables
+IS_FROZEN = bool(getattr(sys, 'frozen', False))
+if IS_FROZEN:
+    # When packaged (PyInstaller), use the executable directory as the root
+    PROJECT_ROOT = Path(sys.executable).resolve().parent
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    # Make imports work when running directly from source
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
 
 from audio.capture import AudioCapture, AudioConfig
 from audio.fallback import SoundcardLoopbackCapture
