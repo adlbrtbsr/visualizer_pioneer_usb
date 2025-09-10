@@ -5,3 +5,6 @@ soundcard>=0.4.2
 moderngl>=5.9.0
 glfw>=2.6.5
 imgui>=2.0.0
+librosa>=0.10.1
+numba>=0.58
+scipy>=1.10

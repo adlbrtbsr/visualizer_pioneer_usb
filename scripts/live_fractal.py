@@ -14,7 +14,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from audio.capture import AudioCapture, AudioConfig
 from audio.fallback import SoundcardLoopbackCapture
-from audio.analysis import compute_spectrum, aggregate_bands, Smoother, Normalizer
+from audio.analysis import Smoother, Normalizer
+from audio.features import FeatureExtractor, FeatureExtractorConfig
+from visuals.mapping import MappingEngine
 from visuals.settings import VisualIntensitySettings, save_visual_intensity_yaml
 from visuals.renderer import FractalRenderer
 from visuals.ui import TkControlPanel
@@ -97,8 +99,49 @@ def main():
             print("[UI] Tkinter control panel failed to launch.")
 
     renderer = FractalRenderer(ctx, W, H)
-    band_normalizer = Normalizer(mode="percentile", window=90, decay=0.02)
-    band_smoother = Smoother(attack=0.6, release=0.3)
+
+    # Load analysis features config
+    analysis_cfg_path = PROJECT_ROOT / "configs" / "analysis.yaml"
+    feature_cfg = None
+    if analysis_cfg_path.is_file():
+        with analysis_cfg_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            fnode = (data.get("features") or {}) if isinstance(data, dict) else {}
+            mel_bands = int(fnode.get("mel_bands", 24))
+            use_chroma = bool(fnode.get("chroma", True))
+            ms = fnode.get("mel_smoother", {})
+            cs = fnode.get("chroma_smoother", {})
+            ss = fnode.get("scalar_smoother", {})
+            nn = fnode.get("normalizer", {})
+            bb = fnode.get("beat", {})
+            feature_cfg = FeatureExtractorConfig(
+                sample_rate=int(analysis_sample_rate),
+                n_fft=int(data.get("n_fft", 1024)),
+                hop_size=int(data.get("hop_size", 512)),
+                mel_bands=mel_bands,
+                use_chroma=use_chroma,
+                mel_smoother_attack=float(ms.get("attack", 0.6)),
+                mel_smoother_release=float(ms.get("release", 0.35)),
+                chroma_smoother_attack=float(cs.get("attack", 0.6)),
+                chroma_smoother_release=float(cs.get("release", 0.35)),
+                scalar_smoother_attack=float(ss.get("attack", 0.6)),
+                scalar_smoother_release=float(ss.get("release", 0.35)),
+                normalizer_mode=str(nn.get("mode", "percentile")),
+                normalizer_window=int(nn.get("window", 120)),
+                normalizer_decay=float(nn.get("decay", 0.05)),
+                normalizer_floor=float(nn.get("floor", 1.0e-3)),
+                beat_threshold=float(bb.get("threshold", 1.4)),
+                beat_short_window=int(bb.get("short_window", 5)),
+                beat_long_window=int(bb.get("long_window", 43)),
+                beat_refractory_frames=int(bb.get("refractory_frames", 12)),
+            )
+    if feature_cfg is None:
+        feature_cfg = FeatureExtractorConfig(sample_rate=int(analysis_sample_rate))
+    extractor = FeatureExtractor(feature_cfg)
+
+    # Mapping engine from YAML
+    mapping_path = PROJECT_ROOT / "configs" / "mapping.yaml"
+    mapping = MappingEngine.from_yaml(mapping_path, mel_bands=feature_cfg.mel_bands)
 
     last_time = time.time()
     prev_f1 = glfw.RELEASE
@@ -133,26 +176,13 @@ def main():
                     break
                 last_block = blk
             if last_block is not None:
-                mono = last_block.astype(np.float32, copy=False)
-                if mono.ndim == 2:
-                    mono = mono.mean(axis=1)
-                mag = compute_spectrum(mono, window="hann", n_fft=NFFT, hop_size=NFFT)
-                bands_mat = aggregate_bands(
-                    mag,
-                    {
-                        "mode": "log",
-                        "num_bands": 3,
-                        "sample_rate": int(analysis_sample_rate),
-                        "n_fft": NFFT,
-                        "min_freq": 20.0,
-                        "max_freq": 8000.0,
-                    },
-                )
-                bands_vec = bands_mat[:, -1]
-                bands_norm = band_normalizer.update(bands_vec)
-                bands_sm = band_smoother.update(bands_norm)
-                b, m, h = float(bands_sm[0]), float(bands_sm[1]), float(bands_sm[2])
-                renderer.update_audio(b, m, h)
+                feats = extractor.update(last_block)
+                now_t = time.time()
+                b, m, h, vis_out = mapping.map(feats, vis_settings, time_sec=now_t)
+                # Update renderer with proxy bands; step() uses VisualIntensitySettings
+                renderer.update_audio(float(b), float(m), float(h))
+                # Replace settings for this frame
+                vis_settings = vis_out
 
             now = time.time()
             dt = now - last_time

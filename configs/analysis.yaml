@@ -30,4 +30,28 @@ beat:
   long_window: 43
   refractory_frames: 12
 
+# Rich feature extraction
+features:
+  mel_bands: 24
+  chroma: true
+  mel_smoother:
+    attack: 0.6
+    release: 0.35
+  chroma_smoother:
+    attack: 0.6
+    release: 0.35
+  scalar_smoother:
+    attack: 0.6
+    release: 0.35
+  normalizer:
+    mode: percentile
+    window: 120
+    decay: 0.05
+    floor: 1.0e-3
+  beat:
+    threshold: 1.4
+    short_window: 5
+    long_window: 43
+    refractory_frames: 12
+
 
