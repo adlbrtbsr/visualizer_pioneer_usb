@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$Name = "VisualizerPioneerUSB",
     [switch]$OneFile = $true
 )
+
+$ErrorActionPreference = "Stop"
 
 Write-Host "==> Building $Name (PyInstaller)" -ForegroundColor Cyan
 
@@ -22,6 +22,11 @@ $oneFileFlag = if ($OneFile) { "--onefile" } else { "" }
 pyinstaller --noconfirm --clean `
   --name "$Name" `
   $oneFileFlag `
+  --paths . `
+  --hidden-import imgui.integrations.glfw `
+  --collect-binaries glfw `
+  --collect-submodules audio `
+  --collect-submodules visuals `
   --add-data "configs\audio.yaml;configs" `
   --add-data "configs\analysis.yaml;configs" `
   --add-data "configs\mapping.yaml;configs" `

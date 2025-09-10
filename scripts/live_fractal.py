@@ -1,6 +1,7 @@
 import sys
 import time
 from pathlib import Path
+import traceback
 
 import numpy as np
 import yaml
@@ -220,6 +221,24 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        try:
+            log_path = PROJECT_ROOT / "error.log"
+            with log_path.open("w", encoding="utf-8") as f:
+                f.write("Unhandled exception in visualizer\n\n")
+                f.write("Exception: " + repr(e) + "\n\n")
+                f.write(traceback.format_exc())
+        except Exception:
+            pass
+        # Try a message box so a double-clicked exe shows the error
+        try:
+            import ctypes  # type: ignore
+            msg = f"An error occurred. See error.log next to the executable.\n\n{e}"
+            ctypes.windll.user32.MessageBoxW(None, msg, "VisualizerPioneerUSB crash", 0)
+        except Exception:
+            pass
+        sys.exit(1)
 
 

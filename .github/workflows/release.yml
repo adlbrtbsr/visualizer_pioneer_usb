@@ -28,6 +28,11 @@ jobs:
           pyinstaller --noconfirm --clean `
             --name "VisualizerPioneerUSB" `
             --onefile `
+            --paths . `
+            --hidden-import imgui.integrations.glfw `
+            --collect-binaries glfw `
+            --collect-submodules audio `
+            --collect-submodules visuals `
             --add-data "configs\\audio.yaml;configs" `
             --add-data "configs\\analysis.yaml;configs" `
             --add-data "configs\\mapping.yaml;configs" `
