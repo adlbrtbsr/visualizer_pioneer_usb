@@ -1,0 +1,39 @@
+mapping:
+  # Indices over mel vector (size 24 by default)
+  mel_low_idx: [0, 1, 2, 3, 4]
+  mel_mid_idx: [8, 9, 10, 11, 12, 13]
+  mel_high_idx: [18, 19, 20, 21, 22, 23]
+
+  # Scale mapping via spectral centroid
+  exp_scale_k: 3000.0
+  scale_min: 0.8
+  scale_max: 3.0
+
+  # Iterations and bailout
+  iterations_base: 200.0
+  iterations_from_bass: 200.0
+  bailout_base: 12.0
+  bailout_mid_gain: 10.0
+
+  # Flux-driven warping/bending (used as gains)
+  warp_from_flux: 0.45
+  bend_from_flux: 0.85
+
+  # Gains influenced by bands
+  motion_from_mid: 1.6
+  morph_from_mid: 1.1
+  ship_from_high: 1.6
+
+  # Trap controls
+  trap_mix_from_energy: 0.9
+  trap_radius_from_bass: 0.9
+
+  # Palette and hue from chroma
+  palette_from_chroma: true
+  hue_from_chroma_weighted: true
+
+  # Beat-driven fractal family cycling
+  fractal_on_beat_types: [0, 1, 2, 3]
+  beat_hold_seconds: 0.35
+
+
