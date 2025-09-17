@@ -145,9 +145,9 @@ class FractalRenderer:
             s.center = self._edge_center + (delta_c * (max_rad / rad))
 
         base_iters = float(getattr(settings, 'iterations_base', s.iter_base))
-        u_iters = int(base_iters + 120 * np.clip(energy, 0.0, 1.5))
+        u_iters = int(base_iters + 60 * np.clip(energy, 0.0, 1.5))
         u_iters = int(u_iters * float(settings.iteration_gain) * float(settings.master))
-        u_iters = int(np.clip(u_iters, 100, 360))
+        u_iters = int(np.clip(u_iters, 5, 420))
         self._upload_uniforms(settings, u_iters)
 
     def draw(self) -> None:

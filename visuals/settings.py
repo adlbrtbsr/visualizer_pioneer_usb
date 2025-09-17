@@ -26,8 +26,8 @@ class VisualIntensitySettings:
     bend_gain: float = 1.0
     # View controls
     view_angle_deg: float = 0.0
-    view_center_x: float = 0.5
-    view_center_y: float = 0.5
+    view_center_x: float = 0.75
+    view_center_y: float = 0.75
 
     @classmethod
     def from_yaml(cls, path: Path):
@@ -59,8 +59,8 @@ class VisualIntensitySettings:
                         fractal_type=int(node.get("fractal_type", 0)),
                         bend_gain=float(node.get("bend_gain", 1.0)),
                         view_angle_deg=float(node.get("view_angle_deg", 0.0)),
-                        view_center_x=float(node.get("view_center_x", 0.5)),
-                        view_center_y=float(node.get("view_center_y", 0.5)),
+                        view_center_x=float(node.get("view_center_x", 0.75)),
+                        view_center_y=float(node.get("view_center_y", 0.75)),
                     )
         except Exception:
             pass

@@ -153,7 +153,7 @@ class MappingEngine:
         out.scale = float(np.clip(self.cfg.scale_min + (self.cfg.scale_max - self.cfg.scale_min) * scale_factor, self.cfg.scale_min, self.cfg.scale_max))
 
         # Iterations base + bass contribution
-        out.iterations_base = float(np.clip(self.cfg.iterations_base + self.cfg.iterations_from_bass * bass, 60.0, 420.0))
+        out.iterations_base = float(np.clip(self.cfg.iterations_base + self.cfg.iterations_from_bass * bass, 5.0, 420.0))
 
         # Bailout from mid
         out.bailout_radius = float(np.clip(self.cfg.bailout_base + self.cfg.bailout_mid_gain * mid, 4.0, 32.0))
