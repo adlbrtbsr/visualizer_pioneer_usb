@@ -15,7 +15,7 @@ from .settings import VisualIntensitySettings
 class ImGuiOverlay:
     def __init__(self, window, width: int, height: int) -> None:
         self._impl: Optional[GlfwRenderer] = None
-        self._visible: bool = True
+        self._visible: bool = False
         if imgui is None or GlfwRenderer is None:
             return
         try:
@@ -44,7 +44,7 @@ class ImGuiOverlay:
             return
         self._visible = not self._visible
 
-    def draw(self, settings: VisualIntensitySettings, pending_save: bool, save_cb: Callable[[VisualIntensitySettings], None]) -> None:
+    def draw(self, settings: VisualIntensitySettings, pending_save: bool, save_cb: Callable[[VisualIntensitySettings], None], extra_draw: Optional[Callable[[], None]] = None) -> None:
         if not self.available or not self._visible:
             return
         try:
@@ -103,6 +103,12 @@ class ImGuiOverlay:
                     except Exception:
                         pass
             imgui.end()
+            # Allow caller to render additional UI panels (e.g., audio device selector)
+            try:
+                if callable(extra_draw):
+                    extra_draw()
+            except Exception:
+                pass
             imgui.render()
             self._impl.render(imgui.get_draw_data())
         except Exception:

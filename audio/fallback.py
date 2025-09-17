@@ -21,10 +21,11 @@ else:
 
 
 class SoundcardLoopbackCapture:
-    def __init__(self, samplerate: int, channels: int, blocksize: int) -> None:
+    def __init__(self, samplerate: int, channels: int, blocksize: int, device_name_hint: Optional[str] = None) -> None:
         self.samplerate = int(samplerate)
         self.channels = int(channels)
         self.blocksize = int(blocksize)
+        self.device_name_hint = device_name_hint
         self._queue: Queue[np.ndarray] = Queue(maxsize=64)
         self._running = False
         self._recorder = None
@@ -48,10 +49,19 @@ class SoundcardLoopbackCapture:
 
         mic = None
         try:
-            for s in sc.all_speakers():
-                if "Realtek" in s.name:
-                    mic = sc.get_microphone(s.name, include_loopback=True)
-                    break
+            # Prefer explicit device hint if provided
+            if self.device_name_hint:
+                # Try exact/substring match on speaker names, then fallback to default
+                for s in sc.all_speakers():
+                    if self.device_name_hint.lower() in s.name.lower():
+                        mic = sc.get_microphone(s.name, include_loopback=True)
+                        break
+            # Otherwise try known stable vendors like Realtek
+            if mic is None:
+                for s in sc.all_speakers():
+                    if "Realtek" in s.name:
+                        mic = sc.get_microphone(s.name, include_loopback=True)
+                        break
         except Exception:
             mic = None
         if mic is None:

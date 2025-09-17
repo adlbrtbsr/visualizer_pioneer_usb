@@ -43,6 +43,11 @@ class FractalRenderer:
         self.ctx = ctx
         self.width = width
         self.height = height
+        # Ensure viewport matches initial framebuffer size
+        try:
+            self.ctx.viewport = (0, 0, int(self.width), int(self.height))
+        except Exception:
+            pass
         self.quad = ctx.buffer(np.array([
             -1, -1,  0, 0,
              1, -1,  1, 0,
@@ -59,6 +64,11 @@ class FractalRenderer:
     def resize(self, width: int, height: int) -> None:
         self.width = width
         self.height = height
+        # Update viewport and resolution uniform
+        try:
+            self.ctx.viewport = (0, 0, int(self.width), int(self.height))
+        except Exception:
+            pass
         if 'u_res' in self.program:
             self.program['u_res'].value = (self.width, self.height)
 
