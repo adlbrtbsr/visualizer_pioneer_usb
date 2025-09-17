@@ -64,7 +64,7 @@ class ImGuiOverlay:
                 _c, settings.trap_mix_gain = imgui.slider_float("Trap Mix Gain", float(settings.trap_mix_gain), 0.0, 2.0); changed = changed or _c
                 _c, settings.glow_gain = imgui.slider_float("Glow Gain", float(settings.glow_gain), 0.0, 2.0); changed = changed or _c
                 _c, settings.scale = imgui.slider_float("Zoom (Scale)", float(settings.scale), 0.4, 4.0); changed = changed or _c
-                _c, settings.iterations_base = imgui.slider_float("Iterations Base", float(settings.iterations_base), 60.0, 300.0); changed = changed or _c
+                _c, settings.iterations_base = imgui.slider_float("Iterations Base", float(settings.iterations_base), 5.0, 420.0); changed = changed or _c
                 _c, settings.bailout_radius = imgui.slider_float("Bailout Radius", float(settings.bailout_radius), 2.0, 16.0); changed = changed or _c
                 _c, settings.morph_gain = imgui.slider_float("Morph Gain", float(settings.morph_gain), 0.0, 2.0); changed = changed or _c
                 _c, settings.ship_gain = imgui.slider_float("Ship Gain", float(settings.ship_gain), 0.0, 2.0); changed = changed or _c
