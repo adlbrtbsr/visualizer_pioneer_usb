@@ -43,6 +43,10 @@ class MappingConfig:
     # Fractal type switching
     fractal_on_beat_types: List[int] = (0, 1, 2, 3)
     beat_hold_seconds: float = 0.35
+    # Phase mapping controls
+    phase_low_idx: Optional[List[int]] = None
+    phase_mid_idx: Optional[List[int]] = None
+    phase_high_idx: Optional[List[int]] = None
 
 
 def _mean_indices(vec: np.ndarray, idx: List[int]) -> float:
@@ -52,6 +56,19 @@ def _mean_indices(vec: np.ndarray, idx: List[int]) -> float:
     if idx_arr.size == 0:
         return 0.0
     return float(np.mean(vec[idx_arr]))
+
+
+def _mean_angle(indices: List[int], phase_vec: np.ndarray) -> float:
+    if not indices:
+        return 0.0
+    idx_arr = np.array([i for i in indices if 0 <= int(i) < phase_vec.shape[0]], dtype=np.int32)
+    if idx_arr.size == 0:
+        return 0.0
+    ang = phase_vec[idx_arr]
+    # Vector average on the unit circle
+    c = float(np.mean(np.cos(ang)))
+    s = float(np.mean(np.sin(ang)))
+    return float(np.arctan2(s, c))
 
 
 class MappingEngine:
@@ -106,6 +123,9 @@ class MappingEngine:
             hue_from_chroma_weighted=bool(block.get("hue_from_chroma_weighted", True)),
             fractal_on_beat_types=list(block.get("fractal_on_beat_types", (0, 1, 2, 3))),
             beat_hold_seconds=float(block.get("beat_hold_seconds", 0.35)),
+            phase_low_idx=list(block.get("phase_low_idx", low_d)),
+            phase_mid_idx=list(block.get("phase_mid_idx", mid_d)),
+            phase_high_idx=list(block.get("phase_high_idx", high_d)),
         )
         return MappingEngine(cfg)
 
@@ -116,11 +136,35 @@ class MappingEngine:
         rms = float(features.get("rms", 0.0))
         centroid_hz = float(features.get("centroid_hz", 0.0))
         beat = bool(features.get("beat", False))
+        mel_phase = np.asarray(features.get("mel_phase", np.zeros_like(mel)), dtype=np.float32)
 
         # Proxies
         bass = _mean_indices(mel, self.cfg.mel_low_idx)
         mid = _mean_indices(mel, self.cfg.mel_mid_idx)
         high = _mean_indices(mel, self.cfg.mel_high_idx)
+
+        # Instantaneous phase per group (circular mean)
+        low_ang = _mean_angle(self.cfg.phase_low_idx or [], mel_phase)
+        mid_ang = _mean_angle(self.cfg.phase_mid_idx or [], mel_phase)
+        high_ang = _mean_angle(self.cfg.phase_high_idx or [], mel_phase)
+
+        # Phase differences, wrapped to [-pi, pi]
+        def wrap(a: float) -> float:
+            return float((a + math.pi) % (2.0 * math.pi) - math.pi)
+
+        d_lm = wrap(mid_ang - low_ang)
+        d_mh = wrap(high_ang - mid_ang)
+        d_hl = wrap(low_ang - high_ang)
+
+        # Interference metrics in [0,1] via cos^2 (aligned -> 1, opposed -> 0)
+        c_lm = 0.5 * (1.0 + math.cos(d_lm))
+        c_mh = 0.5 * (1.0 + math.cos(d_mh))
+        c_hl = 0.5 * (1.0 + math.cos(d_hl))
+        coherence = float(np.clip((c_lm + c_mh + c_hl) / 3.0, 0.0, 1.0))
+
+        # Small directional vector from pairwise phase as XY unit sum
+        vx = float((math.cos(d_lm) + math.cos(d_mh) + math.cos(d_hl)) / 3.0)
+        vy = float((math.sin(d_lm) + math.sin(d_mh) + math.sin(d_hl)) / 3.0)
 
         # Working copy of settings
         out = VisualIntensitySettings(
@@ -145,6 +189,9 @@ class MappingEngine:
             view_angle_deg=settings.view_angle_deg,
             view_center_x=settings.view_center_x,
             view_center_y=settings.view_center_y,
+            phase_hue_gain=getattr(settings, "phase_hue_gain", 0.12),
+            phase_offset_gain=getattr(settings, "phase_offset_gain", 0.003),
+            phase_jitter_gain=getattr(settings, "phase_jitter_gain", 0.0015),
         )
 
         # Structural/continuous mappings
@@ -185,6 +232,12 @@ class MappingEngine:
                 w = chroma + 1e-6
                 hue = float(((idx @ w) / float(np.sum(w))) / 12.0)
                 out.hue_offset = float(np.mod(hue, 1.0))
+
+        # Phase-interference outputs (instantaneous, small)
+        out.phase_hue = float(np.clip(coherence, 0.0, 1.0))  # 0..1 to add to hue subtly
+        out.phase_vec_x = float(np.clip(vx, -1.0, 1.0))
+        out.phase_vec_y = float(np.clip(vy, -1.0, 1.0))
+        out.phase_jitter = float(np.clip(1.0 - coherence, 0.0, 1.0))  # more jitter when incoherent
 
         # Fractal type switching on beat (momentary hold)
         if beat:
