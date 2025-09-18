@@ -24,6 +24,15 @@ class VisualIntensitySettings:
     palette_saturation: float = 0.9
     fractal_type: int = 0
     bend_gain: float = 1.0
+    # Phase-interference controls (gains)
+    phase_hue_gain: float = 0.12
+    phase_offset_gain: float = 0.003
+    phase_jitter_gain: float = 0.0015
+    # Instantaneous values (not saved to YAML)
+    phase_hue: float = 0.0
+    phase_vec_x: float = 0.0
+    phase_vec_y: float = 0.0
+    phase_jitter: float = 0.0
     # View controls
     view_angle_deg: float = 0.0
     view_center_x: float = 0.75
@@ -58,6 +67,9 @@ class VisualIntensitySettings:
                         palette_saturation=float(node.get("palette_saturation", 0.9)),
                         fractal_type=int(node.get("fractal_type", 0)),
                         bend_gain=float(node.get("bend_gain", 1.0)),
+                        phase_hue_gain=float(node.get("phase_hue_gain", 0.12)),
+                        phase_offset_gain=float(node.get("phase_offset_gain", 0.003)),
+                        phase_jitter_gain=float(node.get("phase_jitter_gain", 0.0015)),
                         view_angle_deg=float(node.get("view_angle_deg", 0.0)),
                         view_center_x=float(node.get("view_center_x", 0.75)),
                         view_center_y=float(node.get("view_center_y", 0.75)),
@@ -94,6 +106,9 @@ def save_visual_intensity_yaml(settings: VisualIntensitySettings, path: Path) ->
             "palette_saturation": float(settings.palette_saturation),
             "fractal_type": int(settings.fractal_type),
             "bend_gain": float(settings.bend_gain),
+            "phase_hue_gain": float(settings.phase_hue_gain),
+            "phase_offset_gain": float(settings.phase_offset_gain),
+            "phase_jitter_gain": float(settings.phase_jitter_gain),
             "view_angle_deg": float(settings.view_angle_deg),
             "view_center_x": float(settings.view_center_x),
             "view_center_y": float(settings.view_center_y),

@@ -29,7 +29,7 @@ class TkControlPanel:
             try:
                 self._root = tk.Tk()
                 self._root.title("Fractal Controls")
-                self._root.geometry("360x280")
+                self._root.geometry("360x320")
                 self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
                 def add_slider(row, label, key, from_, to_, resolution=0.01):
@@ -78,9 +78,12 @@ class TkControlPanel:
                 add_slider(17, "View Angle (deg)", "view_angle_deg", -180.0, 180.0, 0.5)
                 add_slider(18, "View Center X", "view_center_x", 0.0, 1.0, 0.005)
                 add_slider(19, "View Center Y", "view_center_y", 0.0, 1.0, 0.005)
+                add_slider(20, "Phase Hue Gain", "phase_hue_gain", 0.0, 0.5, 0.001)
+                add_slider(21, "Phase Offset Gain", "phase_offset_gain", 0.0, 0.02, 0.0005)
+                add_slider(22, "Phase Jitter Gain", "phase_jitter_gain", 0.0, 0.01, 0.0005)
 
                 btn_frame = tk.Frame(self._root)
-                btn_frame.grid(row=20, column=0, columnspan=2, pady=8)
+                btn_frame.grid(row=23, column=0, columnspan=2, pady=8)
 
                 def do_reset():
                     self.settings.master = 1.0
@@ -104,6 +107,9 @@ class TkControlPanel:
                     self.settings.view_angle_deg = 0.0
                     self.settings.view_center_x = 0.5
                     self.settings.view_center_y = 0.5
+                    self.settings.phase_hue_gain = 0.12
+                    self.settings.phase_offset_gain = 0.003
+                    self.settings.phase_jitter_gain = 0.0015
                     for k in [
                         "master",
                         "exposure",
@@ -126,6 +132,9 @@ class TkControlPanel:
                         "view_angle_deg",
                         "view_center_x",
                         "view_center_y",
+                        "phase_hue_gain",
+                        "phase_offset_gain",
+                        "phase_jitter_gain",
                     ]:
                         try:
                             self._vars[k + "_scale"].set(float(getattr(self.settings, k)))
