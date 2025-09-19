@@ -10,7 +10,7 @@ mapping:
   scale_max: 3.0
 
   # Iterations and bailout
-  iterations_base: 20.0
+  iterations_base: 10.0
   iterations_from_bass: 20.0
   bailout_base: 6.0
   bailout_mid_gain: 10.0

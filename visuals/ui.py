@@ -60,7 +60,7 @@ class TkControlPanel:
                 add_slider(0, "Master", "master", 0.0, 2.0, 0.01)
                 add_slider(1, "Exposure", "exposure", 0.6, 1.6, 0.01)
                 add_slider(1, "Contrast", "contrast", 0.5, 2.0, 0.01)
-                add_slider(2, "Palette (0..3)", "palette_id", 0, 3, 1.0)
+                add_slider(2, "Palette (0..7)", "palette_id", 0, 7, 1.0)
                 add_slider(3, "Hue Offset", "hue_offset", 0.0, 1.0, 0.01)
                 add_slider(4, "Palette Saturation", "palette_saturation", 0.0, 1.0, 0.01)
                 add_slider(5, "Fractal Type (0..4)", "fractal_type", 0, 4, 1.0)

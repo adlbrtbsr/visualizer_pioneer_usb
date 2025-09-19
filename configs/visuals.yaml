@@ -36,15 +36,15 @@ live_fractal_intensity:
   glow_gain: 1.9179999828338623
   trap_mix_gain: 1.7319999933242798
   motion_gain: 0.12399999797344208
-  iteration_gain: 1.156999945640564
+  iteration_gain: 1.0
   scale: 2.4779999256134033
   iterations_base: 287.6289978027344
   bailout_radius: 16.0
   morph_gain: 0.0
   ship_gain: 0.11299999803304672
   trap_radius_scale: 1.8609999418258667
-  contrast: 1.4819999933242798
+  contrast: 1.0
   palette_id: 0
-  hue_offset: 0.19599999487400055
-  palette_saturation: 0.5210000276565552
+  hue_offset: 0.0
+  palette_saturation: 1.0
   fractal_type: 0
