@@ -40,6 +40,9 @@ class FractalState:
 	phase_hue: float = 0.0
 	phase_vec: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0], dtype=np.float32))
 	phase_jitter: float = 0.0
+	# Color smoothing parameters
+	hue_param: float = 0.0
+	bass_color: float = 0.0
 
 
 class FractalRenderer:
@@ -151,13 +154,29 @@ class FractalRenderer:
 			s.shear_param = 0.0
 		s.swirl_param = 0.0
 
-		# Phase values from settings (instantaneous, not smoothed here)
-		s.phase_hue = float(getattr(settings, 'phase_hue', 0.0)) * float(getattr(settings, 'phase_hue_gain', 0.0)) * float(settings.master)
+		# Phase values from settings (smoothed to reduce shaking)
+		phase_hue_target = float(getattr(settings, 'phase_hue', 0.0)) * float(getattr(settings, 'phase_hue_gain', 0.0)) * float(settings.master)
+		s.phase_hue = self._lerp(s.phase_hue, phase_hue_target, min(3.0 * dt, 0.5))
 		pvx = float(getattr(settings, 'phase_vec_x', 0.0))
 		pvy = float(getattr(settings, 'phase_vec_y', 0.0))
 		p_gain = float(getattr(settings, 'phase_offset_gain', 0.0)) * float(settings.master)
-		s.phase_vec = np.array([pvx * p_gain, pvy * p_gain], dtype=np.float32)
-		s.phase_jitter = float(getattr(settings, 'phase_jitter', 0.0)) * float(getattr(settings, 'phase_jitter_gain', 0.0)) * float(settings.master)
+		phase_vec_target = np.array([pvx * p_gain, pvy * p_gain], dtype=np.float32)
+		# Stronger smoothing for steadier motion
+		vec_alpha = min(1.5 * dt, 0.25)
+		s.phase_vec = (1.0 - vec_alpha) * s.phase_vec + vec_alpha * phase_vec_target
+		# Deadband and clamp on phase vector magnitude
+		mag = float(np.linalg.norm(s.phase_vec))
+		if mag < 1e-3:
+			s.phase_vec = np.array([0.0, 0.0], dtype=np.float32)
+		elif mag > 0.02:
+			s.phase_vec = s.phase_vec * (0.02 / mag)
+		phase_jitter_target = float(getattr(settings, 'phase_jitter', 0.0)) * float(getattr(settings, 'phase_jitter_gain', 0.0)) * float(settings.master)
+		s.phase_jitter = self._lerp(s.phase_jitter, phase_jitter_target, min(3.0 * dt, 0.5))
+
+		# Smooth color-related parameters to reduce flashing
+		hue_target = float(np.mod(float(getattr(settings, 'hue_offset', 0.0)), 1.0))
+		s.hue_param = self._lerp_wrap01(s.hue_param, hue_target, min(2.5 * dt, 0.35))
+		s.bass_color = self._lerp(s.bass_color, float(np.clip(s.bass_s, 0.0, 1.0)), min(2.0 * dt, 0.3))
 
 		s.center += (self._edge_center - s.center) * min(0.45 * dt, 0.45)
 		delta_c = s.center - self._edge_center
@@ -186,6 +205,8 @@ class FractalRenderer:
 		self._set_uniform(prog, 'u_max_iter', int(u_iters))
 		bass_scaled = float(s.bass_s) * float(settings.glow_gain) * float(settings.master)
 		self._set_uniform(prog, 'u_bass', float(bass_scaled))
+		# Smoothed bass for color computations
+		self._set_uniform(prog, 'u_bass_color', float(s.bass_color))
 		self._set_uniform(prog, 'u_mid', float(s.mid_s))
 		self._set_uniform(prog, 'u_high', float(s.high_s))
 		energy = float(np.clip(((s.bass_s + s.mid_s + s.high_s) / 3.0) * float(settings.exposure) * float(settings.master), 0.0, 1.5))
@@ -196,7 +217,7 @@ class FractalRenderer:
 		self._set_uniform(prog, 'u_bail', float(getattr(settings, 'bailout_radius', 8.0)))
 		self._set_uniform(prog, 'u_contrast', float(getattr(settings, 'contrast', 1.0)))
 		self._set_uniform(prog, 'u_palette_id', int(getattr(settings, 'palette_id', 0)))
-		self._set_uniform(prog, 'u_hue_offset', float(getattr(settings, 'hue_offset', 0.0)))
+		self._set_uniform(prog, 'u_hue_offset', float(s.hue_param))
 		self._set_uniform(prog, 'u_palette_sat', float(getattr(settings, 'palette_saturation', 0.9)))
 		self._set_uniform(prog, 'u_fractal_type', int(getattr(settings, 'fractal_type', 0)))
 		self._set_uniform(prog, 'u_c', (float(s.c_param[0]), float(s.c_param[1])))
@@ -214,9 +235,10 @@ class FractalRenderer:
 		self._set_uniform(prog, 'u_swirl', float(s.swirl_param))
 		self._set_uniform(prog, 'u_shear', float(s.shear_param))
 		# Phase interference uniforms
-		self._set_uniform(prog, 'u_phase_hue', float(s.phase_hue))
-		self._set_uniform(prog, 'u_phase_vec', (float(s.phase_vec[0]), float(s.phase_vec[1])))
-		self._set_uniform(prog, 'u_phase_jitter', float(s.phase_jitter))
+		# Slight attenuation for steadier appearance
+		self._set_uniform(prog, 'u_phase_hue', float(0.7 * s.phase_hue))
+		self._set_uniform(prog, 'u_phase_vec', (float(0.6 * s.phase_vec[0]), float(0.6 * s.phase_vec[1])))
+		self._set_uniform(prog, 'u_phase_jitter', float(0.6 * s.phase_jitter))
 
 		trap_r = float(np.clip(0.32 + 0.25 * (float(s.bass_s) - 0.4), 0.1, 0.7))
 		trap_r *= float(getattr(settings, 'trap_radius_scale', 1.0))
@@ -236,6 +258,13 @@ class FractalRenderer:
 	@staticmethod
 	def _lerp(a: float, b: float, t: float) -> float:
 		return a + (b - a) * t
+
+	@staticmethod
+	def _lerp_wrap01(a: float, b: float, t: float) -> float:
+		# Shortest-path interpolation on [0,1) circle for hue
+		d = (b - a)
+		d = (d + 0.5) % 1.0 - 0.5
+		return (a + d * t) % 1.0
 
 	@staticmethod
 	def _vs_src() -> str:
@@ -288,6 +317,7 @@ class FractalRenderer:
 			uniform int   u_palette_id;
 			uniform float u_hue_offset;
 			uniform float u_palette_sat;
+			uniform float u_bass_color;
 			uniform int   u_fractal_type;
 			// Phase interference uniforms
 			uniform float u_phase_hue;
@@ -389,19 +419,41 @@ class FractalRenderer:
 				float mu_jitter = (fract(sin(dot(gl_FragCoord.xy + vec2(mu), vec2(127.1, 311.7))) * 43758.5453) - 0.5) * 0.15;
 				mu += mu_jitter;
 				float t = mu / float(u_max_iter);
-				float hue = fract(u_hue_offset + 0.02 + 0.96 * clamp(u_bass, 0.0, 1.0) + u_phase_hue * 0.05);
+				float hue = fract(u_hue_offset + 0.02 + 0.96 * clamp(u_bass_color, 0.0, 1.0) + u_phase_hue * 0.05);
 				float sat = clamp(u_palette_sat, 0.0, 1.0);
 				float val = mix(0.6, 1.0, clamp(t + jitter, 0.0, 1.0));
 				vec3 col0 = hsv2rgb(vec3(hue, sat, val));
 				vec3 col1 = mix(vec3(0.9, 0.4, 0.05), vec3(1.0, 0.1, 0.0), pow(clamp(t,0.0,1.0), 0.5));
 				vec3 col2 = mix(vec3(0.1, 0.8, 0.9), vec3(0.0, 0.2, 0.8), clamp(t,0.0,1.0));
 				vec3 col3 = hsv2rgb(vec3(fract(hue + 0.25 * clamp(u_high, 0.0, 1.0)), 1.0, mix(0.7, 1.1, clamp(u_mid, 0.0, 1.0))));
-				vec3 col = (u_palette_id == 0) ? col0 : (u_palette_id == 1 ? col1 : (u_palette_id == 2 ? col2 : col3));
+				// Additional palettes (4..7) for variety
+				// 4: Viridis-like (purple -> teal -> yellow)
+				float tt = clamp(t, 0.0, 1.0);
+				vec3 vir_a = mix(vec3(0.267, 0.005, 0.329), vec3(0.128, 0.567, 0.551), smoothstep(0.0, 1.0, tt * 2.0));
+				vec3 vir_b = mix(vec3(0.128, 0.567, 0.551), vec3(0.993, 0.906, 0.144), smoothstep(0.0, 1.0, max(0.0, (tt - 0.5) * 2.0)));
+				vec3 col4 = (tt < 0.5) ? vir_a : vir_b;
+				// 5: Magma-like (dark -> hot)
+				vec3 hot1 = mix(vec3(0.05, 0.00, 0.10), vec3(0.85, 0.15, 0.10), pow(tt, 0.6));
+				vec3 hot2 = mix(hot1, vec3(1.00, 0.70, 0.20), pow(tt, 2.0));
+				vec3 col5 = mix(hot2, vec3(1.00, 0.95, 0.85), pow(tt, 8.0));
+				// 6: Neon rainbow cycling with t and high band
+				float h6 = fract(hue + 0.60 * tt + 0.20 * clamp(u_high, 0.0, 1.0));
+				vec3 col6 = hsv2rgb(vec3(h6, clamp(0.85 * u_palette_sat, 0.0, 1.0), mix(0.7, 1.2, tt)));
+				// 7: Pastel soft hues influenced by mid band
+				float h7 = fract(hue + 0.20 * clamp(u_mid, 0.0, 1.0));
+				vec3 col7 = hsv2rgb(vec3(h7, clamp(0.3 + 0.3 * u_palette_sat, 0.0, 0.6), mix(0.85, 1.0, tt)));
+				vec3 col = (u_palette_id == 0) ? col0 :
+						   (u_palette_id == 1) ? col1 :
+						   (u_palette_id == 2) ? col2 :
+						   (u_palette_id == 3) ? col3 :
+						   (u_palette_id == 4) ? col4 :
+						   (u_palette_id == 5) ? col5 :
+						   (u_palette_id == 6) ? col6 : col7;
 
 				float trap_c = exp(-8.0 * trap_min_circ);
 				float trap_x = exp(-8.0 * trap_min_cross);
 				float trap = clamp(max(trap_c, trap_x), 0.0, 1.0);
-				float trap_hue = fract(u_hue_offset + 0.1 + 0.35 * trap + 0.2 * u_bass + u_phase_hue * 0.08);
+				float trap_hue = fract(u_hue_offset + 0.1 + 0.35 * trap + 0.2 * u_bass_color + u_phase_hue * 0.08);
 				vec3 trap_col = hsv2rgb(vec3(trap_hue, clamp(0.6 + 0.25 * u_palette_sat, 0.0, 1.0), clamp(0.6 + 0.4 * trap, 0.6, 1.0)));
 				col = mix(col, trap_col, clamp(u_trap_mix, 0.0, 1.0));
 

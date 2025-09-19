@@ -76,6 +76,9 @@ class MappingEngine:
         self.cfg = cfg
         self._last_beat_time: float = -1e9
         self._last_fractal_idx: int = 0
+        # Palette smoothing/hold
+        self._last_palette_id: int = 0
+        self._last_palette_change_time: float = -1e9
 
     @staticmethod
     def from_yaml(path: Path, mel_bands: int) -> "MappingEngine":
@@ -224,8 +227,13 @@ class MappingEngine:
 
         # Palette mapping from chroma
         if self.cfg.palette_from_chroma and chroma.shape[0] == 12:
-            pid = int(np.argmax(chroma)) % 4
-            out.palette_id = pid
+            pid = int(np.argmax(chroma)) % 8
+            # Hold palette for a short time to reduce rapid flicker
+            hold_s = float(self.cfg.__dict__.get("palette_hold_seconds", 0.5))
+            if pid != self._last_palette_id and (time_sec - self._last_palette_change_time) > hold_s:
+                self._last_palette_id = pid
+                self._last_palette_change_time = time_sec
+            out.palette_id = int(self._last_palette_id)
             if self.cfg.hue_from_chroma_weighted:
                 # Weighted average hue: chroma bins mapped around circle
                 idx = np.arange(12, dtype=np.float32)
